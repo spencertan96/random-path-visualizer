@@ -473,6 +473,7 @@ def display_graph(img):
     return graph_img
 
 def generate_path():
+    global DISPLAY_GRAPH
     path = []
     members = initialize_members()
     prev_assignments = retrieve_prev_assignments()
@@ -511,7 +512,7 @@ def generate_path():
     if img is None:
         sys.exit("Could not read the image.")
     
-    # DIsplay graph with annotated nodes and edges, can be used to save an image of the graph
+    # Display graph with annotated nodes and edges, can be used to save an image of the graph
     if DISPLAY_GRAPH:
         graph_img = display_graph(img)
     # Controls for image prompt, "x" to exit, "s" to save image, "c" to continue to display path
@@ -522,9 +523,11 @@ def generate_path():
             return
         if k == ord("s"):
             cv.imwrite(GRAPHFILEPATH, graph_img)
+            DISPLAY_GRAPH = False
         elif k == ord("c"):
             # continue to display path
             cv.destroyAllWindows()
+            DISPLAY_GRAPH = False
             break
 
     # Draw arrows
