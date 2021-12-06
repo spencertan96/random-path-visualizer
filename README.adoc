@@ -1,6 +1,7 @@
 = Random Path Generator
 
 This is a personal project that was initially started to automate the creation of permutations for my cell group for prayer purposes. I then decided to repurpose it into a generic path generator and also experiment with different ways to connect nodes in a graph to look more like a smooth curve.
+A visual representation of the generated path can be shown by providing an image along with an input file that will dictate the possible paths that can be drawn on the image.
 
 Currently, the generator uses a greedy node selector that does not always return an optimal path.
 
@@ -31,10 +32,17 @@ _Nodes in the graph comprise of each member AND intermediate nodes that will for
 
 _Lines starting with "#" are treated as comments and are ignored._
 
-=== Sample Results
+=== Sample Result
 ifdef::env-github[]
 image:images/sample_result.png[width="400"]
 endif::[]
+
+=== Features
+* Visual representation of the generated path 
+_(sample input for 11 members is provided)_
+* Path can be saved to prevent any repetition of *pairs* in future path generation
+** Etc. If A -> B -> C was saved previously, A -> B and B -> C will not repeat
+* Arrows on the image gradually changes color so that it is easy to follow the path
 
 === Required packages:
 * Numpy

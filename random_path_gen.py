@@ -255,13 +255,15 @@ def retrieve_prev_assignments():
     with open(SAVEFILEPATH, 'r') as f:
         text = f.readline()
         text = text.rstrip()
-        print(text)
+        if DEBUG:
+            print(text)
         while text and text[0] != "#" and text != "\n":
             pair = text.split("->")
             assignments[pair[0]] = pair[1]
             text = f.readline()
             text = text.rstrip()
-            print(text)
+            if DEBUG:
+                print(text)
     return assignments
 
 def initialize_member_neighbours(members):
