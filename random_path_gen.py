@@ -6,6 +6,7 @@ import numpy as np
 import cv2 as cv
 
 # Adjustable options
+NO_IMAGE = False
 EACH_MEMBER_ALL_NEIGHBOURS = True
 GREEDY_PICKING = True
 DEBUG = False
@@ -141,8 +142,14 @@ class Member:
                 # get previous assignment
                 prev = prev_assignments[self.name]
                 if prev == self.neighbors[index].name:
-                    print("Repeated neighbor", prev, "detected, re-selecting!")
+                    if DEBUG:
+                        print("Repeated neighbor", prev, "detected, re-selecting!")
                     # update neighbor list
+                    if self.neighbors == 1:
+                        # only 1 neighbor left but is repeated
+                        if DEBUG:
+                            print("No eligible neighbor! Restarting path!")
+                        return None
                     intermediateLst = list(self.neighbors)
                     intermediateLst.pop(index)
                     self.neighbors = intermediateLst
@@ -151,7 +158,8 @@ class Member:
             if self.neighbors[index].selected:
                 # ran out of choices
                 if len(self.neighbors) == 1:
-                    print("No neighbors available!")
+                    if DEBUG:
+                        print("No neighbors available! Restarting path!")
                     return None
                 # update neighbor list
                 intermediateLst = list(self.neighbors)
@@ -252,18 +260,19 @@ def retrieve_prev_assignments():
         return dict()
     
     assignments = dict()
+    all_assignments = ""
     with open(SAVEFILEPATH, 'r') as f:
         text = f.readline()
         text = text.rstrip()
-        if DEBUG:
-            print(text)
+        all_assignments += text
         while text and text[0] != "#" and text != "\n":
             pair = text.split("->")
             assignments[pair[0]] = pair[1]
             text = f.readline()
             text = text.rstrip()
-            if DEBUG:
-                print(text)
+            all_assignments += ", " + text
+    if DEBUG: 
+        print(all_assignments[:-2])
     return assignments
 
 def initialize_member_neighbours(members):
@@ -506,6 +515,27 @@ def generate_path():
         members.remove(next)
         member = next
     print("Final path: ", path)
+
+    ## Stop if no input image
+    is_current_config_saved = False
+    while NO_IMAGE:
+        instruction = "Type 'x' to exit, 'r' to generate a new path\n" if is_current_config_saved else "Type 'x' to exit, 's' to save current path', 'r' to generate a new path\n"
+        char = input(instruction).lower()
+        # If "x" key pressed, close image
+        if char[0] == "x":
+            return
+        elif char[0] == "s":
+            if is_current_config_saved:
+                print("Path already saved!")
+            else:
+                # Save assignments
+                save_assignments(path)
+                print("Current path saved!")
+                is_current_config_saved = True
+        elif char[0] == "r":
+            is_current_config_saved = False
+            generate_path()
+            return
 
     ## Draw arrows on picture
 
