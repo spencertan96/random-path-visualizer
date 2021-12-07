@@ -14,8 +14,7 @@ Sample input files are included.
 
 _Nodes in the graph comprise of each member AND intermediate nodes that will form the paths between each member_
 
-
-=== Syntax of text file input :
+=== Syntax of text file input *with* input image:
 [source,python]
 ----
 # Each node's pixel location
@@ -29,6 +28,17 @@ _Nodes in the graph comprise of each member AND intermediate nodes that will for
 [NodeNumber]:[ConnectedNodeNumber],[ConnectedNodeNumber2]
 [NodeNumber2]:[ConnectedNodeNumber],[ConnectedNodeNumber2]
 ----
+
+_Lines starting with "#" are treated as comments and are ignored._
+
+=== Syntax of text file input *without* input image:
+[source,python]
+----
+# List of members separated by commas
+[MemberName],[MemberName2],[MemberName3],[MemberName4]
+----
+
+_Only the first uncommented line is read, following lines are ignored._
 
 _Lines starting with "#" are treated as comments and are ignored._
 
