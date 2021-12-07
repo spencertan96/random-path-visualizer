@@ -10,8 +10,8 @@ NO_IMAGE = False
 EACH_MEMBER_ALL_NEIGHBOURS = True
 GREEDY_PICKING = True
 DEBUG = False
-FILEPATH = './sample_input.txt'
-SAVEFILEPATH = './sample_previous_path.txt'
+FILEPATH = 'sample_input.txt'
+SAVEFILEPATH = 'sample_previous_path.txt'
 IMGFILEPATH = 'sample_img.png'
 DISPLAY_GRAPH = False
 GRAPHFILEPATH = 'sample_graph.png'
@@ -106,10 +106,12 @@ class Node:
 
 # Each member has a name.
 class Member:
+    # Each member is tied to a node
+    # Unless there is no image as no node required
     def __init__(self, name, node, neighbors = ()) -> None:
         self.name = name
-        self.node = node
-        self.coords = node.coords
+        self.node = node if node else None
+        self.coords = node.coords if node else None
         self.neighbors = neighbors
         self.selected = False
         pass
@@ -179,17 +181,52 @@ class Member:
         self.neighbors = intermediateLst
         return member
 
+# Returns list of members that the path will be made out of
 def initialize_members():
-    ## Initialize graph nodes and edges
+    members_names = read_simple_input_file(FILEPATH) if NO_IMAGE else read_input_file(FILEPATH) 
+
+    # Names and corresponding nodes
+    members = []
+    for i in range(MEMBER_NUM):
+        if NO_IMAGE:
+            members.append(Member(members_names[i], None))
+        else:
+            members.append(Member(members_names[i], Node.node_dict[i+1]))
+    print("Members:", members)
+    return members
+
+# Read input file, return list of members
+# Automatically counts the number of members in the input file and sets MEMBER_NUM
+def read_simple_input_file(filepath):
+    global MEMBER_NUM
+    # Only read one line, ignore extra lines
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            text = f.readline()
+            if DEBUG:
+                print(text)
+            while text and text[0] == "#":
+                # Ignore comments
+                text = f.readline()
+                continue
+            names = text.split(",")
+            MEMBER_NUM = len(names)
+            return names
+    else:
+        print("Input file {FILEPATH}' not found!")
+        quit()
+
+# Read input file, populate Node.node_dict, return list of members
+def read_input_file(filepath):
     # Load from file
     # Format: {MemberName}:{XCoordinate},{YCoordinate}
     #         {NodeNumber}:{XCoordinate},{YCoordinate}
     #         till empty line, then
     #         {NodeNumber}:{ConnectedNode},{ConnectedNode2}
     members_initialized = 0
-    members_names = []
-    if os.path.exists(FILEPATH):
-        with open(FILEPATH, 'r') as f:
+    names = []
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
             text = f.readline()
             if DEBUG:
                 print(text)
@@ -202,7 +239,7 @@ def initialize_members():
                 if members_initialized < MEMBER_NUM:
                     members_initialized += 1
                     node_num = members_initialized
-                    members_names.append(text[0])
+                    names.append(text[0])
                 else: 
                     node_num = int(text[0])
                 coords = text[1].split(",")
@@ -223,36 +260,13 @@ def initialize_members():
                 for node in nodes:
                     Node.node_dict[node_num].add_edge(int(node))
                 text = f.readline()
-            # TODO: Validate edges (through a function?)
+            # TODO: Validate edges
         if DEBUG:
             Node.node_dict[1].print_edges()
     else:
-        print("Graph data file {FILEPATH}' not found!")
-        # Initialize nodes of members
-        # Default if no file loaded
-        Node.node_dict[1] = Node(1, (602, 228))
-        Node.node_dict[2] = Node(2, (534, 426))
-        Node.node_dict[3] = Node(3, (174, 626))
-        Node.node_dict[4] = Node(4, (423, 190))
-        Node.node_dict[5] = Node(5, (269, 365))
-        Node.node_dict[6] = Node(6, (521, 23))
-        Node.node_dict[7] = Node(7, (374, 566))
-        Node.node_dict[8] = Node(8, (600, 622))
-        Node.node_dict[9] = Node(9, (165, 130))
-        Node.node_dict[10] = Node(10, (60, 346))
-        Node.node_dict[11] = Node(11, (300, 49))
-        # Initialize connecting nodes
-        Node.node_dict[12] = Node(12, (602, 228))
-        # Initialize edges
-        Node.node_dict[1].add_edge(12)
-        print(Node.node_dict)
-
-    # Names and corresponding nodes
-    members = []
-    for i in range(MEMBER_NUM):
-        members.append(Member(members_names[i], Node.node_dict[i+1]))
-    print("Members:", members)
-    return members
+        print("Input file {FILEPATH}' not found!")
+        quit()
+    return names
 
 # Returns a dictionary of member: previously assigned member, or an empty dictionary if no previous assignment saved.
 def retrieve_prev_assignments():
