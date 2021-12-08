@@ -2,20 +2,28 @@ import os
 import math
 import random
 import sys
+import heapq
 import numpy as np
 import cv2 as cv
+from enum import Enum
+
+class Pathfinding(Enum):
+    GREEDY_PICKING = 1
+    DIJKSTRA = 2
 
 # Adjustable options
 NO_IMAGE = False
-EACH_MEMBER_ALL_NEIGHBOURS = True
-GREEDY_PICKING = True
+METHOD = Pathfinding.GREEDY_PICKING
 DEBUG = False
 FILEPATH = 'sample_input.txt'
 SAVEFILEPATH = 'sample_previous_path.txt'
 IMGFILEPATH = 'sample_img.png'
 DISPLAY_GRAPH = False
 GRAPHFILEPATH = 'sample_graph.png'
+# Only matters if NO_IMAGE is False
 MEMBER_NUM = 11
+# Not very useful option
+EACH_MEMBER_ALL_NEIGHBOURS = True
 
 # Constants
 ARROWTIP_RATIO = 15
@@ -43,8 +51,24 @@ class Edge:
         self.euclid_dist = euclid_dist
         pass
 
+class DijkstraNode:
+    def __init__(self, num, dist, prev) -> None:
+        self.num = num
+        self.dist = dist
+        # Relevant values to be set during relaxing of neighbours
+        self.prev = prev
+        pass
+
+    def __repr__(self) -> str:
+        return f'N{self.num}: {self.dist}'
+
+    def __lt__(self, other):
+        if self.dist == other.dist:
+            return self.num < other.num
+        return self.dist < other.dist
+
 class Node:
-    # Class-wide dictionary to store references to Nodes.
+    # Class-wide dictionary to store references to Nodes, int -> Node.
     node_dict = dict()
 
     def __init__(self, num, coordinates) -> None:
@@ -79,7 +103,7 @@ class Node:
     # Method to get next node to connect line to (for drawing).
     # Returns node number of selected node
     def get_next(self, goal_node):
-        if GREEDY_PICKING:
+        if METHOD == Pathfinding.GREEDY_PICKING:
             node_nums = self.connected_nodes
             goal_coords = goal_node.coords
             # Go through list of edges, calculate distance to goal for each edge
@@ -103,6 +127,68 @@ class Node:
         else:
             # TODO: A* pathfinding, use Euclidean distance as heuristic
             return -1
+
+    # Input: Node object that represents the goal node
+    def get_dijkstra_path(self, goal_node):
+        # Dijkstra's algorithm
+        # Priority queue to be filled with DijkstraNodes with custom comparator (node_num, dist_to)
+        # There will be duplicates of same node in PQ, only minimum dist will be relevant, rest will be ignored
+        pq = []
+        heapq.heapify(pq)
+        prev_dict = dict()
+        # Dict to track if node has been visited
+        visited_dict = dict()
+        for num in Node.node_dict.keys():
+            if num == self.num:
+                dn = DijkstraNode(num, 0, num)
+                heapq.heappush(pq, dn)
+                continue
+            dn = DijkstraNode(num, sys.maxsize, -1)
+            heapq.heappush(pq, dn)
+        prev = None
+        #print("length of pq at start is: ", len(arr))
+        while pq:
+            # [node_num, min_dist]
+            #smallest_node = heapq.nsmallest(1, arr, key=lambda x: x[1])[0]
+            smallest_node = heapq.heappop(pq)
+            if smallest_node.num in visited_dict:
+                continue
+
+            if not smallest_node.num == self.num:
+                if not smallest_node.num == goal_node.num:
+                    if smallest_node.num <= MEMBER_NUM:
+                        continue
+            visited_dict[smallest_node.num] = True
+            # Update previous node
+            prev_dict[smallest_node.num] = smallest_node.prev
+            if goal_node.num == smallest_node.num:
+                # Goal reached, terminate
+                break
+            #print("length of pq aft getting smallest is: ", len(arr))
+            #print("pq b4 relaxing: ", arr)
+            relax_neighbours(smallest_node, goal_node.num, pq)
+            #print("pq aft relaxing: ", arr)
+        # Get sequence from prev_dict
+        seq = []
+        num = goal_node.num
+        if DEBUG:
+            print(prev_dict)
+        while num != self.num:
+            seq.insert(0, num)
+            num = prev_dict[num]
+        seq.insert(0, self.num)
+        print(seq)
+        return seq
+
+# Takes in a DijkstraNode and PQ, calculates new distance and pushes into PQ
+# Ignore member nodes!
+def relax_neighbours(dnode, goal_num, pq):
+        node = Node.node_dict[dnode.num]
+        for n in node.connected_nodes:
+            new_dist = get_distance_between(Node.node_dict[n].coords, node.coords) + dnode.dist
+            heapq.heappush(pq, DijkstraNode(n, new_dist, dnode.num))
+            continue
+        return
 
 # Each member has a name.
 class Member:
@@ -396,6 +482,7 @@ def draw_arrows(path, img):
             continue
         # Get waypoints from "prev" to "member"
         prev_node = prev.node
+        dijkstra_nodes = prev_node.get_dijkstra_path(member.node)
         if DEBUG: 
             print(f"First node: {prev_node.num}")
         node_num = prev_node.num
