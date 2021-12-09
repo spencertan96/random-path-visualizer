@@ -8,8 +8,8 @@ import cv2 as cv
 from enum import Enum
 
 class Pathfinding(Enum):
-    GREEDY_PICKING = 1
-    DIJKSTRA = 2
+    GREEDY_PICKING = 0
+    DIJKSTRA = 1
 
 # Adjustable options
 NO_IMAGE = False
@@ -26,6 +26,7 @@ MEMBER_NUM = 11
 EACH_MEMBER_ALL_NEIGHBOURS = True
 
 # Constants
+NUM_METHODS = 2
 ARROWTIP_RATIO = 15
 GREEN = (0, 255, 0)
 MAGENTA = (255, 0, 255)
@@ -100,9 +101,9 @@ class Node:
         self.connected_nodes += [node_num]
         pass
 
-    # Method to get next node to connect line to (for drawing).
+    # Method to get next node to connect line to (for Greedy Picking).
     # Returns node number of selected node
-    def get_next(self, goal_node):
+    def get_next_greedy(self, goal_node):
         if METHOD == Pathfinding.GREEDY_PICKING:
             node_nums = self.connected_nodes
             goal_coords = goal_node.coords
@@ -127,6 +128,19 @@ class Node:
         else:
             # TODO: A* pathfinding, use Euclidean distance as heuristic
             return -1
+
+    # Input: Node object that represents the goal node
+    def get_greedy_path(self, goal_node):
+        nodes = [self.num]
+        node_num = self.num
+        prev_node = self
+        while node_num != goal_node.num:
+            node_num = prev_node.get_next_greedy(goal_node)
+            if DEBUG: 
+                print(f"Next node: {node_num}")
+            nodes += [node_num]
+            prev_node = Node.node_dict[node_num]
+        return nodes
 
     # Input: Node object that represents the goal node
     def get_dijkstra_path(self, goal_node):
@@ -177,7 +191,6 @@ class Node:
             seq.insert(0, num)
             num = prev_dict[num]
         seq.insert(0, self.num)
-        print(seq)
         return seq
 
 # Takes in a DijkstraNode and PQ, calculates new distance and pushes into PQ
@@ -461,8 +474,7 @@ def pick_member(members, index):
     members.pop(index)
     return (member, members)
 
-def draw_arrows(path, img):
-    firstMember = True
+def draw_points(nodeslst, img):
     # Color variation
     color_r = 0
     color_g = 255
@@ -470,37 +482,18 @@ def draw_arrows(path, img):
     red = False
     green_and_blue = False
     green = False
+    pathStart = None
 
-    # Add points to draw along
-    for member in path:
-        if DEBUG: 
-            print(f"Drawing arrow to {member}...")
-        if firstMember:
-            prev = member
-            pathStart = member.coords
-            firstMember = False
-            continue
-        # Get waypoints from "prev" to "member"
-        prev_node = prev.node
-        dijkstra_nodes = prev_node.get_dijkstra_path(member.node)
-        if DEBUG: 
-            print(f"First node: {prev_node.num}")
-        node_num = prev_node.num
-        nodes = [node_num]
-        while node_num != member.node.num:
-            node_num = prev_node.get_next(member.node)
-            if DEBUG: 
-                print(f"Next node: {node_num}")
-            nodes += [node_num]
-            prev_node = Node.node_dict[node_num]
-        # Draw waypoints
-        prev_node = nodes[0]
-        for node in nodes:
-            if node == nodes[0]:
+    for lst in nodeslst:
+        prev_node = lst[0]
+        for node in lst:
+            if node == lst[0]:
+                if pathStart == None:
+                    pathStart = Node.node_dict[node].coords
                 continue
-            elif node != nodes[-1]:
+            elif node != lst[-1]:
                 img = cv.line(img, Node.node_dict[prev_node].coords, Node.node_dict[node].coords,
-                             (color_r, color_g, color_b), 3, -1, 0)
+                                (color_r, color_g, color_b), 3, -1, 0)
             else:
                 # Get distance between coords
                 dist = get_distance_between(Node.node_dict[prev_node].coords, Node.node_dict[node].coords)
@@ -508,7 +501,7 @@ def draw_arrows(path, img):
                 img = cv.arrowedLine(img, Node.node_dict[prev_node].coords, Node.node_dict[node].coords,
                                     (color_r, color_g, color_b), 3, -1, 0, tip_size)
             prev_node = node
-
+        
         # Vary color from green to R+B to red to G+B then back to green
         if red:
             color_g = 0
@@ -540,18 +533,67 @@ def draw_arrows(path, img):
             if color_g == 15:
                 # (240, 15, 240)
                 red = True
-        prev = member
-    chainEnd = prev.coords
+        
+    pathEnd = Node.node_dict[prev_node].coords
 
     # Draw text "Start" and "End"
     displacementX = 20
     displacementY = 15
     startPos = (pathStart[0] + displacementX, pathStart[1] + displacementY)
-    endPos = (chainEnd[0] + displacementX, chainEnd[1] + displacementY)
+    endPos = (pathEnd[0] + displacementX, pathEnd[1] + displacementY)
     cv.putText(img, "START", startPos, cv.FONT_HERSHEY_SIMPLEX, 1, RED, 3, -1)
     cv.putText(img, "END", endPos, cv.FONT_HERSHEY_SIMPLEX, 1, RED, 3, -1)
 
+    # Display instructions
+    instructionPos = (10, 25)
+    secondInstructionPos = (10, 50)
+    thirdInstructionPos = (10, 75)
+    fourthInstructionPos = (10, 100)
+    cv.putText(img, "'T' to toggle path algorithm", instructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+    cv.putText(img, "'S' to save current path", secondInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+    cv.putText(img, "'R' to re-generate", thirdInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+    cv.putText(img, "'X' to close", fourthInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+
     return img
+
+# Return a list of images with different paths based on the different pathfinding methods
+def draw_arrows(path, img):
+    greedy_img = img.copy()
+    dijkstra_img = img.copy()
+    # List of lists of nodes, where each list is to be an arrow
+    greedy_nodes = []
+    dijkstra_nodes = []
+    firstMember = True
+
+    # Add points to draw along
+    for member in path:
+        if DEBUG: 
+            print(f"Drawing arrow to {member}...")
+        if firstMember:
+            prev = member
+            firstMember = False
+            continue
+        # Get waypoints from "prev" to "member"
+        prev_node = prev.node
+        if DEBUG: 
+            print(f"First node: {prev_node.num}")
+        dijkstra_nodes.append(prev_node.get_dijkstra_path(member.node))
+        greedy_nodes.append(prev_node.get_greedy_path(member.node))
+        prev = member
+    if not DEBUG:
+        print(f"Dijkstra's path: {dijkstra_nodes}")
+        print(f"Greedy picking's path: {greedy_nodes}")
+
+    greedy_img = draw_points(greedy_nodes, greedy_img)
+    dijkstra_img = draw_points(dijkstra_nodes, dijkstra_img)
+    
+    # Draw waypoints
+    nodes_dict = {
+        Pathfinding.GREEDY_PICKING: greedy_nodes,
+        Pathfinding.DIJKSTRA: dijkstra_nodes
+    }
+
+    return [greedy_img, dijkstra_img]
 
 def save_assignments(path):
     with open(SAVEFILEPATH, 'w') as f:
@@ -586,6 +628,7 @@ def display_graph(img):
 
 def generate_path():
     global DISPLAY_GRAPH
+    global METHOD
     path = []
     members = initialize_members()
     prev_assignments = retrieve_prev_assignments()
@@ -654,7 +697,7 @@ def generate_path():
         if k == ord("x"):
             # exit
             return
-        if k == ord("s"):
+        elif k == ord("s"):
             cv.imwrite(GRAPHFILEPATH, graph_img)
             DISPLAY_GRAPH = False
         elif k == ord("c"):
@@ -664,23 +707,15 @@ def generate_path():
             break
 
     # Draw arrows
-    img = draw_arrows(path, img)
-
-    # Show final image
-    instructionPos = (10, 25)
-    secondInstructionPos = (10, 50)
-    thirdInstructionPos = (10, 75)
-    cv.putText(img, "'R' to re-generate", instructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
-    cv.putText(img, "'X' to close", secondInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
-    cv.putText(img, "'S' to save current path", thirdInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
-    cv.imshow("Generated Path", img)
+    images = draw_arrows(path, img)
     
     is_current_config_saved = False
     while True:
+        image_to_show = images[METHOD.value]
         if is_current_config_saved:
             saveNotifPos = (10, 530)
-            cv.putText(img, "Path saved!", saveNotifPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
-            cv.imshow("Generated Path", img)
+            cv.putText(image_to_show, "Path saved!", saveNotifPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+        cv.imshow("Generated Path", image_to_show)
             
         k = cv.waitKey(0)
         # If "x" key pressed, close image
@@ -691,6 +726,12 @@ def generate_path():
             save_assignments(path)
             print("Current path saved!")
             is_current_config_saved = True
+        elif k == ord("t"):
+            # Toggle pathfinding method
+            curr_method = METHOD.value
+            next_method = curr_method + 1 if curr_method < NUM_METHODS - 1 else curr_method - 1
+            METHOD = Pathfinding(next_method)
+            print(f"Now using: {METHOD}")
         elif k == ord("r"):
             is_current_config_saved = False
             generate_path()
