@@ -13,7 +13,6 @@ class Pathfinding(Enum):
 
 # Adjustable options
 NO_IMAGE = False
-METHOD = Pathfinding.GREEDY_PICKING
 DEBUG = False
 FILEPATH = 'sample_input.txt'
 SAVEFILEPATH = 'sample_previous_path.txt'
@@ -27,6 +26,8 @@ EACH_MEMBER_ALL_NEIGHBOURS = True
 
 # Constants
 NUM_METHODS = 2
+# Initial pathfinding method
+METHOD = Pathfinding.GREEDY_PICKING
 ARROWTIP_RATIO = 15
 GREEN = (0, 255, 0)
 MAGENTA = (255, 0, 255)
@@ -104,31 +105,29 @@ class Node:
     # Method to get next node to connect line to (for Greedy Picking).
     # Returns node number of selected node
     def get_next_greedy(self, goal_node):
-        if METHOD == Pathfinding.GREEDY_PICKING:
-            node_nums = self.connected_nodes
-            goal_coords = goal_node.coords
-            # Go through list of edges, calculate distance to goal for each edge
-            dist_list = []
-            for node_num in node_nums:
-                # Make sure cannot point to other members if they are not the goal
-                if node_num <= MEMBER_NUM and node_num != goal_node.num:
-                    continue
-                dist = get_distance_between(goal_coords, Node.node_dict[node_num].coords)
-                dist_list += [(node_num, dist)]
-            # Sort generated distances and pick shortest
-            dist_list.sort(key=sort_by_dist)
-            for tpl in dist_list:
-                if Node.node_dict[tpl[0]].selected:
-                    continue
-                # Not selected yet
-                Node.node_dict[tpl[0]].selected = True
-                return tpl[0]
-            # All nodes already selected, use closest
-            return dist_list[0][0]
-        else:
-            # TODO: A* pathfinding, use Euclidean distance as heuristic
-            return -1
-
+        node_nums = self.connected_nodes
+        goal_coords = goal_node.coords
+        # Go through list of edges, calculate distance to goal for each edge
+        dist_list = []
+        for node_num in node_nums:
+            # Make sure cannot point to other members if they are not the goal
+            if node_num <= MEMBER_NUM and node_num != goal_node.num:
+                continue
+            dist = get_distance_between(goal_coords, Node.node_dict[node_num].coords)
+            dist_list += [(node_num, dist)]
+        # Sort generated distances and pick shortest
+        dist_list.sort(key=sort_by_dist)
+        for tpl in dist_list:
+            if Node.node_dict[tpl[0]].selected:
+                continue
+            # Not selected yet
+            Node.node_dict[tpl[0]].selected = True
+            return tpl[0]
+        # All nodes already selected, use closest
+        return dist_list[0][0]
+    
+    # TODO: A* pathfinding, use Euclidean distance as heuristic
+    
     # Input: Node object that represents the goal node
     def get_greedy_path(self, goal_node):
         nodes = [self.num]
@@ -580,7 +579,7 @@ def draw_arrows(path, img):
         dijkstra_nodes.append(prev_node.get_dijkstra_path(member.node))
         greedy_nodes.append(prev_node.get_greedy_path(member.node))
         prev = member
-    if not DEBUG:
+    if DEBUG:
         print(f"Dijkstra's path: {dijkstra_nodes}")
         print(f"Greedy picking's path: {greedy_nodes}")
 
