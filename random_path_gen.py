@@ -21,13 +21,13 @@ DISPLAY_GRAPH = False
 GRAPHFILEPATH = 'sample_graph.png'
 # Only matters if NO_IMAGE is False
 MEMBER_NUM = 11
+# Initial pathfinding method
+METHOD = Pathfinding.GREEDY_PICKING
 # Not very useful option
 EACH_MEMBER_ALL_NEIGHBOURS = True
 
 # Constants
 NUM_METHODS = 2
-# Initial pathfinding method
-METHOD = Pathfinding.GREEDY_PICKING
 ARROWTIP_RATIO = 15
 GREEN = (0, 255, 0)
 MAGENTA = (255, 0, 255)
@@ -46,23 +46,21 @@ def get_distance_between(coords1, coords2):
 def sort_by_dist(tuple):
     return tuple[1]
 
-# One-way edges, only stores other node that current node connects to.
-class Edge:
-    def __init__(self, num, euclid_dist) -> None:
-        self.node_num = num
-        self.euclid_dist = euclid_dist
-        pass
-
+# Class meant to be used in relaxing of neighbours in Dijkstra's algorithm through a Priority Queue.
 class DijkstraNode:
+    # Class-wide dictionary to store references to DijkstraNodes, int -> DijkstraNode.
+    node_dict = dict()
+
     def __init__(self, num, dist, prev) -> None:
         self.num = num
         self.dist = dist
+        self.selected = False
         # Relevant values to be set during relaxing of neighbours
         self.prev = prev
         pass
 
     def __repr__(self) -> str:
-        return f'N{self.num}: {self.dist}'
+        return f'N{self.num}: {self.dist}{self.selected}'
 
     def __lt__(self, other):
         if self.dist == other.dist:
@@ -158,15 +156,12 @@ class Node:
                 continue
             dn = DijkstraNode(num, sys.maxsize, -1)
             heapq.heappush(pq, dn)
-        prev = None
-        #print("length of pq at start is: ", len(arr))
         while pq:
-            # [node_num, min_dist]
-            #smallest_node = heapq.nsmallest(1, arr, key=lambda x: x[1])[0]
             smallest_node = heapq.heappop(pq)
-            if smallest_node.num in visited_dict:
+            # Ignore visited nodes/selected nodes
+            if smallest_node.num in visited_dict or DijkstraNode.node_dict[smallest_node.num].selected:
                 continue
-
+            # Never select member nodes unless it is the source node or goal node
             if not smallest_node.num == self.num:
                 if not smallest_node.num == goal_node.num:
                     if smallest_node.num <= MEMBER_NUM:
@@ -177,10 +172,10 @@ class Node:
             if goal_node.num == smallest_node.num:
                 # Goal reached, terminate
                 break
-            #print("length of pq aft getting smallest is: ", len(arr))
-            #print("pq b4 relaxing: ", arr)
             relax_neighbours(smallest_node, goal_node.num, pq)
-            #print("pq aft relaxing: ", arr)
+        # Check if goal reached
+        if num not in prev_dict:
+            print("Error! Goal not reached!")
         # Get sequence from prev_dict
         seq = []
         num = goal_node.num
@@ -188,6 +183,9 @@ class Node:
             print(prev_dict)
         while num != self.num:
             seq.insert(0, num)
+            if num != goal_node.num:
+                # Don't mark goal node as selected or it will get skipped when relaxing
+                DijkstraNode.node_dict[num].selected = True
             num = prev_dict[num]
         seq.insert(0, self.num)
         return seq
@@ -342,6 +340,8 @@ def read_input_file(filepath):
                     node_num = int(text[0])
                 coords = text[1].split(",")
                 Node.node_dict[node_num] = Node(node_num, (int(coords[0]), int(coords[1])))
+                # Attributes don't really matter, only need to track whether used or not through .selected
+                DijkstraNode.node_dict[node_num] = DijkstraNode(node_num, -1, -1)
                 text = f.readline()
             # Add edges
             text = f.readline()
