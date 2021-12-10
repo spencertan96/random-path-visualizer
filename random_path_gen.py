@@ -172,9 +172,9 @@ class Node:
             if goal_node.num == smallest_node.num:
                 # Goal reached, terminate
                 break
-            relax_neighbours(smallest_node, goal_node.num, pq)
+            relax_neighbours(smallest_node, pq)
         # Check if goal reached
-        if num not in prev_dict:
+        if goal_node.num not in prev_dict:
             print("Error! Goal not reached!")
         # Get sequence from prev_dict
         seq = []
@@ -192,7 +192,7 @@ class Node:
 
 # Takes in a DijkstraNode and PQ, calculates new distance and pushes into PQ
 # Ignore member nodes!
-def relax_neighbours(dnode, goal_num, pq):
+def relax_neighbours(dnode, pq):
         node = Node.node_dict[dnode.num]
         for n in node.connected_nodes:
             new_dist = get_distance_between(Node.node_dict[n].coords, node.coords) + dnode.dist
@@ -557,11 +557,9 @@ def draw_points(nodeslst, img):
 
 # Return a list of images with different paths based on the different pathfinding methods
 def draw_arrows(path, img):
-    greedy_img = img.copy()
-    dijkstra_img = img.copy()
+    new_img = img.copy()
     # List of lists of nodes, where each list is to be an arrow
-    greedy_nodes = []
-    dijkstra_nodes = []
+    nodes = []
     firstMember = True
 
     # Add points to draw along
@@ -576,23 +574,28 @@ def draw_arrows(path, img):
         prev_node = prev.node
         if DEBUG: 
             print(f"First node: {prev_node.num}")
-        dijkstra_nodes.append(prev_node.get_dijkstra_path(member.node))
-        greedy_nodes.append(prev_node.get_greedy_path(member.node))
+        if METHOD == Pathfinding.GREEDY_PICKING:
+            nodes.append(prev_node.get_greedy_path(member.node))
+        elif METHOD == Pathfinding.DIJKSTRA:
+            nodes.append(prev_node.get_dijkstra_path(member.node))
         prev = member
     if DEBUG:
-        print(f"Dijkstra's path: {dijkstra_nodes}")
-        print(f"Greedy picking's path: {greedy_nodes}")
+        print(f"{METHOD}'s path: {nodes}")
 
-    greedy_img = draw_points(greedy_nodes, greedy_img)
-    dijkstra_img = draw_points(dijkstra_nodes, dijkstra_img)
+    new_img = draw_points(nodes, new_img)
     
-    # Draw waypoints
-    nodes_dict = {
-        Pathfinding.GREEDY_PICKING: greedy_nodes,
-        Pathfinding.DIJKSTRA: dijkstra_nodes
-    }
+    return new_img
 
-    return [greedy_img, dijkstra_img]
+# Un-select all nodes
+def reset_node_status():
+    if METHOD == Pathfinding.GREEDY_PICKING:
+        # Reset Node.node_dict
+        for num, node in Node.node_dict.items():
+            node.selected = False
+    else:
+        # Reset DijkstraNode.node_dict
+        for num, node in DijkstraNode.node_dict.items():
+            node.selected = False
 
 def save_assignments(path):
     with open(SAVEFILEPATH, 'w') as f:
@@ -706,11 +709,10 @@ def generate_path():
             break
 
     # Draw arrows
-    images = draw_arrows(path, img)
+    image_to_show = draw_arrows(path, img)
     
     is_current_config_saved = False
     while True:
-        image_to_show = images[METHOD.value]
         if is_current_config_saved:
             saveNotifPos = (10, 530)
             cv.putText(image_to_show, "Path saved!", saveNotifPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
@@ -729,8 +731,11 @@ def generate_path():
             # Toggle pathfinding method
             curr_method = METHOD.value
             next_method = curr_method + 1 if curr_method < NUM_METHODS - 1 else curr_method - 1
+            reset_node_status()
             METHOD = Pathfinding(next_method)
             print(f"Now using: {METHOD}")
+            # re-draw with new METHOD
+            image_to_show = draw_arrows(path, img)
         elif k == ord("r"):
             is_current_config_saved = False
             generate_path()
