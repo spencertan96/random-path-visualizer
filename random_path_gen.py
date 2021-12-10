@@ -174,8 +174,11 @@ class Node:
                 break
             relax_neighbours(smallest_node, pq)
         # Check if goal reached
-        if goal_node.num not in prev_dict:
-            print("Error! Goal not reached!")
+        if goal_node.num not in prev_dict or prev_dict[goal_node.num] == -1:
+            print("Error! Goal cannot be reached! Restarting generator...")
+            # Failsafe, restart
+            generate_path()
+            quit()
         # Get sequence from prev_dict
         seq = []
         num = goal_node.num
@@ -243,7 +246,7 @@ class Member:
                     if DEBUG:
                         print("Repeated neighbor", prev, "detected, re-selecting!")
                     # update neighbor list
-                    if self.neighbors == 1:
+                    if len(self.neighbors) == 1:
                         # only 1 neighbor left but is repeated
                         if DEBUG:
                             print("No eligible neighbor! Restarting path!")
@@ -701,7 +704,7 @@ def generate_path():
             return
         elif k == ord("s"):
             cv.imwrite(GRAPHFILEPATH, graph_img)
-            DISPLAY_GRAPH = False
+            print(f"Graph saved in {GRAPHFILEPATH}")
         elif k == ord("c"):
             # continue to display path
             cv.destroyAllWindows()
