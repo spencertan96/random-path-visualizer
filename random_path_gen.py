@@ -14,18 +14,19 @@ class Pathfinding(Enum):
 
 # Adjustable options
 NO_IMAGE = False
-DEBUG = False
 FILEPATH = 'sample_input.txt'
 SAVEFILEPATH = 'sample_previous_path.txt'
 IMGFILEPATH = 'sample_img.png'
-DISPLAY_GRAPH = False
-GRAPHFILEPATH = 'sample_graph.png'
 # Only matters if NO_IMAGE is False
 MEMBER_NUM = 11
 # Initial pathfinding method
 METHOD = Pathfinding.GREEDY_PICKING
 # Not very useful option
 EACH_MEMBER_ALL_NEIGHBOURS = True
+# Developer options
+DISPLAY_GRAPH = False
+GRAPHFILEPATH = 'sample_graph.png'
+DEBUG = False
 
 # Constants
 NUM_METHODS = 3
@@ -699,10 +700,10 @@ def generate_path():
     # Display graph with annotated nodes and edges, can be used to save an image of the graph
     if DISPLAY_GRAPH:
         graph_img = display_graph(img)
-    # Controls for image prompt, "x" to exit, "s" to save image, "c" to continue to display path
+    # Controls for image prompt, "q" to quit, "s" to save image, "c" to continue to display path
     while DISPLAY_GRAPH:
         k = cv.waitKey(0)
-        if k == ord("x"):
+        if k == ord("q"):
             # exit
             return
         elif k == ord("s"):
