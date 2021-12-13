@@ -10,6 +10,7 @@ from enum import Enum
 class Pathfinding(Enum):
     GREEDY_PICKING = 0
     DIJKSTRA = 1
+    DIJKSTRA_WITH_OVERLAP = 2
 
 # Adjustable options
 NO_IMAGE = False
@@ -27,7 +28,7 @@ METHOD = Pathfinding.GREEDY_PICKING
 EACH_MEMBER_ALL_NEIGHBOURS = True
 
 # Constants
-NUM_METHODS = 2
+NUM_METHODS = 3
 ARROWTIP_RATIO = 15
 GREEN = (0, 255, 0)
 MAGENTA = (255, 0, 255)
@@ -188,7 +189,9 @@ class Node:
             seq.insert(0, num)
             if num != goal_node.num:
                 # Don't mark goal node as selected or it will get skipped when relaxing
-                DijkstraNode.node_dict[num].selected = True
+                # Only mark if overlap disallowed
+                if METHOD != Pathfinding.DIJKSTRA_WITH_OVERLAP:
+                    DijkstraNode.node_dict[num].selected = True
             num = prev_dict[num]
         seq.insert(0, self.num)
         return seq
@@ -551,10 +554,10 @@ def draw_points(nodeslst, img):
     secondInstructionPos = (10, 50)
     thirdInstructionPos = (10, 75)
     fourthInstructionPos = (10, 100)
-    cv.putText(img, "'T' to toggle path algorithm", instructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+    cv.putText(img, "'Z'/'X' to switch algorithms", instructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
     cv.putText(img, "'S' to save current path", secondInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
     cv.putText(img, "'R' to re-generate", thirdInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
-    cv.putText(img, "'X' to close", fourthInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+    cv.putText(img, "'Q' to quit", fourthInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
 
     return img
 
@@ -579,7 +582,7 @@ def draw_arrows(path, img):
             print(f"First node: {prev_node.num}")
         if METHOD == Pathfinding.GREEDY_PICKING:
             nodes.append(prev_node.get_greedy_path(member.node))
-        elif METHOD == Pathfinding.DIJKSTRA:
+        elif METHOD == Pathfinding.DIJKSTRA or METHOD == Pathfinding.DIJKSTRA_WITH_OVERLAP:
             nodes.append(prev_node.get_dijkstra_path(member.node))
         prev = member
     if DEBUG:
@@ -668,10 +671,10 @@ def generate_path():
     ## Stop if no input image
     is_current_config_saved = False
     while NO_IMAGE:
-        instruction = "Type 'x' to exit, 'r' to generate a new path\n" if is_current_config_saved else "Type 'x' to exit, 's' to save current path', 'r' to generate a new path\n"
+        instruction = "Type 'q' to quit, 'r' to generate a new path\n" if is_current_config_saved else "Type 'q' to quit, 's' to save current path', 'r' to generate a new path\n"
         char = input(instruction).lower()
         # If "x" key pressed, close image
-        if char[0] == "x":
+        if char[0] == "q":
             return
         elif char[0] == "s":
             if is_current_config_saved:
@@ -723,17 +726,26 @@ def generate_path():
             
         k = cv.waitKey(0)
         # If "x" key pressed, close image
-        if k == ord("x"):
+        if k == ord("q"):
             break
         elif k == ord("s"):
             # Save assignments
             save_assignments(path)
             print("Current path saved!")
             is_current_config_saved = True
-        elif k == ord("t"):
-            # Toggle pathfinding method
+        elif k == ord("x"):
+            # Use next method
             curr_method = METHOD.value
-            next_method = curr_method + 1 if curr_method < NUM_METHODS - 1 else curr_method - 1
+            next_method = curr_method + 1 if curr_method < NUM_METHODS - 1 else 0
+            reset_node_status()
+            METHOD = Pathfinding(next_method)
+            print(f"Now using: {METHOD}")
+            # re-draw with new METHOD
+            image_to_show = draw_arrows(path, img)
+        elif k == ord("z"):
+            # Use previous method
+            curr_method = METHOD.value
+            next_method = curr_method - 1 if curr_method != 0 else NUM_METHODS - 1
             reset_node_status()
             METHOD = Pathfinding(next_method)
             print(f"Now using: {METHOD}")
