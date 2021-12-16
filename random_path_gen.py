@@ -5,12 +5,14 @@ import sys
 import heapq
 import numpy as np
 import cv2 as cv
-from enum import Enum
+from enum import Enum, unique
 
+@unique
 class Pathfinding(Enum):
     GREEDY_PICKING = 0
     DIJKSTRA = 1
     DIJKSTRA_WITH_OVERLAP = 2
+    BEZIER = 3
 
 # Adjustable options
 NO_IMAGE = False
@@ -29,7 +31,7 @@ GRAPHFILEPATH = 'sample_graph.png'
 DEBUG = False
 
 # Constants
-NUM_METHODS = 3
+NUM_METHODS = len(Pathfinding)
 ARROWTIP_RATIO = 15
 GREEN = (0, 255, 0)
 MAGENTA = (255, 0, 255)
@@ -197,6 +199,40 @@ class Node:
         seq.insert(0, self.num)
         return seq
 
+    # Get Dijkstra path, use points as control points to generate a bezier curve.
+    # Get points from curve at segments of t.
+    # Output: List of coordinates as tuples
+    def get_bezier_path(self, goal_node):
+        path = self.get_dijkstra_path(goal_node)
+        seq = []
+        NUM_POINTS = 10
+        t_steps = 1 / NUM_POINTS
+        t = 0
+        while t <= 1:
+            arr = []
+            arr2 = []
+            # Initialize array with first set of LERPs, path needs to and is guaranteed to be > 2 nodes
+            # path first contains node_nums
+            for i in range(len(path)):
+                if i == 0:
+                    continue
+                # add LERPS to arr
+                val = lerp(Node.node_dict[path[i-1]].coords, Node.node_dict[path[i]].coords, t)
+                arr.append(val)
+            # Arr should now be filled with coordinates
+            while len(arr) > 1:
+                for i in range(len(arr)):
+                    if i == 0:
+                        continue
+                    val = lerp(arr[i-1], arr[i], t)
+                    arr2.append(val)
+                arr = arr2.copy()
+                arr2 = []
+            rounded_coords = (round(arr[0][0]), round(arr[0][1]))
+            seq.append(rounded_coords)
+            t += t_steps
+        return seq
+
 # Takes in a DijkstraNode and PQ, calculates new distance and pushes into PQ
 # Ignore member nodes!
 def relax_neighbours(dnode, pq):
@@ -206,6 +242,14 @@ def relax_neighbours(dnode, pq):
             heapq.heappush(pq, DijkstraNode(n, new_dist, dnode.num))
             continue
         return
+
+# Input: 2 coordinates and a t-value with which to LERP with.
+# Output: A 2-tuple of coordinates
+# Rounds to 2 d.p to preserve meaningful decimals, only rounded to int at end of function
+def lerp(coords1, coords2, t):
+    x = round(coords1[0] * (1 - t) + coords2[0] * t, 2)
+    y = round(coords1[1] * (1 - t) + coords2[1] * t, 2)
+    return (x, y)
 
 # Each member has a name.
 class Member:
@@ -585,6 +629,18 @@ def draw_arrows(path, img):
             nodes.append(prev_node.get_greedy_path(member.node))
         elif METHOD == Pathfinding.DIJKSTRA or METHOD == Pathfinding.DIJKSTRA_WITH_OVERLAP:
             nodes.append(prev_node.get_dijkstra_path(member.node))
+        elif METHOD == Pathfinding.BEZIER:
+            # List of coordinates that do not correspond to any nodes
+            coords_lst = prev_node.get_bezier_path(member.node)
+            # Create temporary nodes that point to coords in Node.node_dict
+            num_nodes = len(Node.node_dict)
+            new_num = num_nodes + 1
+            nodes_lst = []
+            for coords in coords_lst:
+                Node.node_dict[new_num] = Node(new_num, (coords[0], coords[1]))
+                nodes_lst.append(new_num)
+                new_num += 1
+            nodes.append(nodes_lst)
         prev = member
     if DEBUG:
         print(f"{METHOD}'s path: {nodes}")
