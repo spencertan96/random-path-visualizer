@@ -18,6 +18,9 @@ NO_IMAGE = False
 FILEPATH = 'sample_input.txt'
 SAVEFILEPATH = 'sample_previous_path.txt'
 IMGFILEPATH = 'sample_img.png'
+# Number of points in a bezier curve
+# (The higher it is, the smoother curves will be at the expense of computation time)
+NUM_POINTS = 10
 # Only matters if NO_IMAGE is False
 MEMBER_NUM = 11
 # Initial pathfinding method
@@ -205,7 +208,6 @@ class Node:
     # Output: List of coordinates as tuples
     def get_bezier_path(self, path):
         seq = []
-        NUM_POINTS = 10
         t_steps = 1 / NUM_POINTS
         t = 0
         while t <= 1:
