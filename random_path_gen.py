@@ -12,7 +12,6 @@ class Pathfinding(Enum):
     GREEDY_PICKING = 0
     DIJKSTRA = 1
     DIJKSTRA_WITH_OVERLAP = 2
-    BEZIER = 3
 
 # Adjustable options
 NO_IMAGE = False
@@ -31,6 +30,7 @@ GRAPHFILEPATH = 'sample_graph.png'
 DEBUG = False
 
 # Constants
+BEZIERIFY = False
 NUM_METHODS = len(Pathfinding)
 ARROWTIP_RATIO = 15
 GREEN = (0, 255, 0)
@@ -199,11 +199,11 @@ class Node:
         seq.insert(0, self.num)
         return seq
 
-    # Get Dijkstra path, use points as control points to generate a bezier curve.
+    # Input: A path (list of node_nums)
+    # Use points in path as control points to generate a bezier curve.
     # Get points from curve at segments of t.
     # Output: List of coordinates as tuples
-    def get_bezier_path(self, goal_node):
-        path = self.get_dijkstra_path(goal_node)
+    def get_bezier_path(self, path):
         seq = []
         NUM_POINTS = 10
         t_steps = 1 / NUM_POINTS
@@ -625,25 +625,32 @@ def draw_arrows(path, img):
         prev_node = prev.node
         if DEBUG: 
             print(f"First node: {prev_node.num}")
+
         if METHOD == Pathfinding.GREEDY_PICKING:
-            nodes.append(prev_node.get_greedy_path(member.node))
+            path = prev_node.get_greedy_path(member.node)
         elif METHOD == Pathfinding.DIJKSTRA or METHOD == Pathfinding.DIJKSTRA_WITH_OVERLAP:
-            nodes.append(prev_node.get_dijkstra_path(member.node))
-        elif METHOD == Pathfinding.BEZIER:
+            path = prev_node.get_dijkstra_path(member.node)
+
+        # Bezierify-ing lines
+        if BEZIERIFY:
             # List of coordinates that do not correspond to any nodes
-            coords_lst = prev_node.get_bezier_path(member.node)
+            coords_lst = prev_node.get_bezier_path(path)
             # Create temporary nodes that point to coords in Node.node_dict
             num_nodes = len(Node.node_dict)
             new_num = num_nodes + 1
-            nodes_lst = []
+            new_nodes = []
             for coords in coords_lst:
                 Node.node_dict[new_num] = Node(new_num, (coords[0], coords[1]))
-                nodes_lst.append(new_num)
+                new_nodes.append(new_num)
                 new_num += 1
-            nodes.append(nodes_lst)
+            nodes.append(new_nodes)
+        else:
+            nodes.append(path)
+
         prev = member
     if DEBUG:
-        print(f"{METHOD}'s path: {nodes}")
+        bezier_str = " - Bezier-ified" if BEZIERIFY else ""
+        print(f"{METHOD}{bezier_str}'s path: {nodes}")
 
     new_img = draw_points(nodes, new_img)
     
@@ -694,6 +701,7 @@ def display_graph(img):
 def generate_path():
     global DISPLAY_GRAPH
     global METHOD
+    global BEZIERIFY
     path = []
     members = initialize_members()
     prev_assignments = retrieve_prev_assignments()
@@ -791,6 +799,8 @@ def generate_path():
             print("Current path saved!")
             is_current_config_saved = True
         elif k == ord("x"):
+            # Automatically remove Bezierification
+            BEZIERIFY = False
             # Use next method
             curr_method = METHOD.value
             next_method = curr_method + 1 if curr_method < NUM_METHODS - 1 else 0
@@ -800,6 +810,8 @@ def generate_path():
             # re-draw with new METHOD
             image_to_show = draw_arrows(path, img)
         elif k == ord("z"):
+            # Automatically remove Bezierification
+            BEZIERIFY = False
             # Use previous method
             curr_method = METHOD.value
             next_method = curr_method - 1 if curr_method != 0 else NUM_METHODS - 1
@@ -807,6 +819,14 @@ def generate_path():
             METHOD = Pathfinding(next_method)
             print(f"Now using: {METHOD}")
             # re-draw with new METHOD
+            image_to_show = draw_arrows(path, img)
+        elif k == ord("b"):
+            # Toggle Bezier-ification of current paths
+            BEZIERIFY = not BEZIERIFY
+            display_str = f"Converting {METHOD} path into Bezier curves!" if BEZIERIFY else f"Now using: {METHOD} without Bezier curves!"
+            print(display_str)
+            reset_node_status()
+            # re-draw 
             image_to_show = draw_arrows(path, img)
         elif k == ord("r"):
             is_current_config_saved = False
