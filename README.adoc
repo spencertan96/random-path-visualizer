@@ -8,6 +8,8 @@ Currently, the generator has 2 main methods to draw the paths between each membe
  . A *greedy* node selector that uses Euclidean distance heuristic that is *not* guaranteed to return a path. It does not use the *same* node twice for drawing so that no lines overlap completely with each other.
  . *Dijkstra's algorithm* from each member to the next. Users can toggle between allowing usage of the *same* node twice, to show and compare between the different output.
 
+It also has an option to convert the current paths that are stiff-looking into smooth Bezier curves.
+
 === Sample Result
 * Path with *Greedy algorithm*:
 +
@@ -31,6 +33,7 @@ endif::[]
 ==== Controls
 
 * Type `Z` and `X` to cycle through the pathfinding methods
+* Type `B` to convert current path into Bezier curves
 * Type `R` to generate a new path
 * Type `S` to save the current path (to prevent future path generation to repeat any pairs)
 * Type `Q` to quit
