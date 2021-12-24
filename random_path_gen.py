@@ -18,19 +18,19 @@ NO_IMAGE = False
 FILEPATH = 'sample_input.txt'
 SAVEFILEPATH = 'sample_previous_path.txt'
 IMGFILEPATH = 'sample_img.png'
+# Only matters if NO_IMAGE is False
+MEMBER_NUM = 11
 # Number of points in a bezier curve
 # (The higher it is, the smoother curves will be at the expense of computation time)
 NUM_POINTS = 10
-# Only matters if NO_IMAGE is False
-MEMBER_NUM = 11
-# Initial pathfinding method
-METHOD = Pathfinding.GREEDY_PICKING
 # Not very useful option
 EACH_MEMBER_ALL_NEIGHBOURS = True
 # Developer options
 DISPLAY_GRAPH = False
 GRAPHFILEPATH = 'sample_graph.png'
 DEBUG = False
+# Initial pathfinding method
+METHOD = Pathfinding.GREEDY_PICKING
 
 # Constants
 BEZIERIFY = False
@@ -41,6 +41,8 @@ MAGENTA = (255, 0, 255)
 RED = (0, 0, 255)
 BLUE = (255, 0, 0)
 BLACK = (0, 0, 0)
+MEMBERS = []
+CIRCLE_RADIUS = 62
 
 # Input: 2-tuple (etc. (0, 10), (15, 20))
 def get_distance_between(coords1, coords2):
@@ -637,6 +639,10 @@ def draw_arrows(path, img):
         if BEZIERIFY:
             # List of coordinates that do not correspond to any nodes
             coords_lst = prev_node.get_bezier_path(path)
+            ctrl_pt = validate_path(coords_lst, prev, member)
+            print("control point that intersected:", ctrl_pt)
+            if ctrl_pt != 0:
+                print("at point:", coords_lst[ctrl_pt-1])
             # Create temporary nodes that point to coords in Node.node_dict
             num_nodes = len(Node.node_dict)
             new_num = num_nodes + 1
@@ -657,6 +663,95 @@ def draw_arrows(path, img):
     new_img = draw_points(nodes, new_img)
     
     return new_img
+
+# Check each line segment and make sure no intersections with any members in image.
+# Ignore member itself.
+# Input: list of coordinates
+# Output: Integer that cooresponds to control point to be shifted, if 0 returned, no intersection
+def validate_path(coords_lst, member_from, member_to):
+    for i in range(len(coords_lst)):
+        if i == 0:
+            continue
+        p0 = coords_lst[i-1]
+        p1 = coords_lst[i]
+        if test_intersection(p0, p1, member_from, member_to):
+            return i
+    return 0
+
+# Each member is approximated to a circle.
+# Input: 2 points of line segment to be tested for intersections
+# Output: T if any intersection, F if not
+def test_intersection(p0, p1, member_from, member_to):
+    ray_dir = (p1[0] - p0[0], p1[1] - p0[1])
+    ray_origin = p0
+    for member in MEMBERS:
+        # Ignore member_from and member_to
+        if member.name == member_from.name or member.name == member_to.name:
+            continue
+        center = member.coords
+        o_minus_c = (ray_origin[0] - center[0], ray_origin[1] - center[1])
+        # Need to change type to int64 to prevent overflow
+        # a = np.dot(ray_dir, ray_dir).astype(np.int64) # dir DOT dir
+        # b = 2 * np.dot(ray_dir, o_minus_c).astype(np.int64) # 2 * dir DOT (origin - center)
+        # c = np.dot(o_minus_c, o_minus_c).astype(np.int64) - CIRCLE_RADIUS * CIRCLE_RADIUS # (origin - c) DOT (origin - center) - radius^2
+        # discriminant = b * b - 4 * a * c
+
+        # LERP between 2 points
+        # x = (1-t)*x0 + t*x1
+        # y = (1-t)*y0 + t*y1
+        # Find intersection between line and circle
+        # If 0 <= t <= 1, has intersection
+        # (x - h)^2 + (y - k)^2 = r^2
+        # Subst. x and y into eqn, solve for t
+        p0x_sq = p0[0] * p0[0]
+        p1x_sq = p1[0] * p1[0]
+        p0p1x = p0[0] * p1[0]
+        p0y_sq = p0[1] * p0[1]
+        p1y_sq = p1[1] * p1[1]
+        p0p1y = p0[1] * p1[1]
+        a = p0x_sq + p1x_sq - 2 * p0p1x + p0y_sq + p1y_sq - 2 * p0p1y
+        b = -2 * p0x_sq + 2 * p0p1x + 2 * p0[0] * center[0] - 2 * p1[0] * center[0] - 2 * p0y_sq + 2 * p0p1y + 2 * p0[1] * center[1] - 2 * p1[1] * center[1]
+        c = p0x_sq + center[0] * center[0] - 2 * p0[0] * center[0] + p0y_sq + center[1] * center[1] - 2 * p0[1] * center[1] - CIRCLE_RADIUS * CIRCLE_RADIUS
+        if a == 0:
+            # linear equation
+            if b == 0:
+                t = - c
+            else:
+                t = c / b
+            if t >= 0 and t <= 1:
+                x1 = (1 - t) * p0[0] + t * p1[0]
+                y1 = (1 - t) * p0[1] + t * p1[1]
+                print(f"1 intersection at: ({x1},{y1})")
+                print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                return True
+            # no intersection
+            continue
+        discrim = b * b - 4 * a * c
+        if discrim > 0:
+            sqrt_discrim = math.sqrt(discrim)
+            t1 = (- b - sqrt_discrim) / (2 * a)
+            t2 = (- b + sqrt_discrim) / (2 * a)
+            if (t1 >= 0 and t1 <= 1) or (t2 >= 0 and t2 <= 1):
+                print(f"t1: {t1}, t2: {t2}")
+                x1 = (1 - t1) * p0[0] + t1 * p1[0]
+                y1 = (1 - t1) * p0[1] + t1 * p1[1]
+                x2 = (1 - t2) * p0[0] + t2 * p1[0]
+                y2 = (1 - t2) * p0[1] + t2 * p1[1]
+                print(f"2 intersections at: ({x1},{y1}) and ({x2},{y2})")
+                print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                return True
+        elif discrim == 0:
+            t1 = (- b) / (2 * a)
+            print(f"t1: {t1}")
+            if t1 >= 0 and t1 <= 1:
+                x1 = (1 - t1) * p0[0] + t1 * p1[0]
+                y1 = (1 - t1) * p0[1] + t1 * p1[1]
+                print(f"1 intersection at: ({x1},{y1})")
+                print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                return True
+        # no intersection
+        continue
+    return False
 
 # Un-select all nodes
 def reset_node_status():
@@ -701,11 +796,13 @@ def display_graph(img):
     return graph_img
 
 def generate_path():
+    global MEMBERS
     global DISPLAY_GRAPH
     global METHOD
     global BEZIERIFY
     path = []
     members = initialize_members()
+    MEMBERS = members.copy()
     prev_assignments = retrieve_prev_assignments()
     initialize_member_neighbours(members)
     # Pick random starting point
