@@ -143,8 +143,6 @@ class Node:
         prev_node = self
         while node_num != goal_node.num:
             node_num = prev_node.get_next_greedy(goal_node)
-            if DEBUG: 
-                print(f"Next node: {node_num}")
             nodes += [node_num]
             prev_node = Node.node_dict[node_num]
         return nodes
@@ -325,8 +323,6 @@ class Member:
         member = self.neighbors[index]
         member.selected = True
         # remove selected neighbor
-        if DEBUG:
-            print("Picked", member, "out of", num_neighbors, "choices")
         # print(self.neighbors)
         intermediateLst = list(self.neighbors)
         intermediateLst.pop(index)
@@ -600,14 +596,18 @@ def draw_points(nodeslst, img):
     cv.putText(img, "END", endPos, cv.FONT_HERSHEY_SIMPLEX, 1, RED, 3, -1)
 
     # Display instructions
-    instructionPos = (10, 25)
-    secondInstructionPos = (10, 50)
-    thirdInstructionPos = (10, 75)
-    fourthInstructionPos = (10, 100)
-    cv.putText(img, "'Z'/'X' to switch algorithms", instructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
-    cv.putText(img, "'S' to save current path", secondInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
-    cv.putText(img, "'R' to re-generate", thirdInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
-    cv.putText(img, "'Q' to quit", fourthInstructionPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+    x_pos = 6
+    y_pos = 18
+    line_spacing = 20
+    instr_pos = []
+    for i in range(0, 6):
+        instr_pos.append((x_pos, y_pos + line_spacing * i))
+    cv.putText(img, "'Z'/'X' to switch algorithms", instr_pos[0], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
+    cv.putText(img, "'B' to toggle Bezier curves", instr_pos[1], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
+    cv.putText(img, "'A' to toggle line adjustment", instr_pos[2], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
+    cv.putText(img, "'S' to save current path", instr_pos[3], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
+    cv.putText(img, "'R' to re-generate", instr_pos[4], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
+    cv.putText(img, "'Q' to quit", instr_pos[5], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
 
     return img
 
@@ -628,8 +628,6 @@ def draw_arrows(path, img):
             continue
         # Get waypoints from "prev" to "member"
         prev_node = prev.node
-        if DEBUG: 
-            print(f"First node: {prev_node.num}")
 
         if METHOD == Pathfinding.GREEDY_PICKING:
             node_path = prev_node.get_greedy_path(member.node)
@@ -686,9 +684,9 @@ def validate_path(coords_lst, member_from, member_to, path):
                 node_coords = Node.node_dict[nodenum_to_adjust].coords
                 centerToPt = (node_coords[0] - intersectingMember[0], node_coords[1] - intersectingMember[1])
                 normCenterToPt = (centerToPt[0] / np.linalg.norm(centerToPt), centerToPt[1] / np.linalg.norm(centerToPt))
-                print("normCenterToPt:", normCenterToPt)
                 new_pos = (node_coords[0] + round(adjustmentFactor * normCenterToPt[0]), node_coords[1] + round(adjustmentFactor * normCenterToPt[1]))
-                print(f"Adjusting node: {nodenum_to_adjust} by {adjustmentFactor} x {normCenterToPt}")
+                if DEBUG:
+                    print(f"Adjusting node: {nodenum_to_adjust} by {adjustmentFactor} x {normCenterToPt}")
                 adjustmentFactor /= 2 if not 1 else 1
                 
                 # create temp node to hold new_pos
@@ -696,10 +694,8 @@ def validate_path(coords_lst, member_from, member_to, path):
                 new_num = num_nodes + 1
                 new_node = Node(new_num, new_pos)
                 Node.node_dict[new_num] = new_node
-                print(f"node path before: {path}")
                 path.pop(node_index)
                 path.insert(node_index, new_node.num)
-                print(f"node path aft: {path}")
                 
                 # Reset params
                 coords_lst = member_from.node.get_bezier_path(path)
@@ -745,8 +741,8 @@ def test_intersection(p0, p1, member_from, member_to):
             if t >= 0 and t <= 1:
                 x1 = (1 - t) * p0[0] + t * p1[0]
                 y1 = (1 - t) * p0[1] + t * p1[1]
-                print(f"1 intersection at: ({x1},{y1})")
-                print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                if DEBUG: 
+                    print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
                 return center
             # no intersection
             continue
@@ -756,22 +752,14 @@ def test_intersection(p0, p1, member_from, member_to):
             t1 = (- b - sqrt_discrim) / (2 * a)
             t2 = (- b + sqrt_discrim) / (2 * a)
             if (t1 >= 0 and t1 <= 1) or (t2 >= 0 and t2 <= 1):
-                print(f"t1: {t1}, t2: {t2}")
-                x1 = (1 - t1) * p0[0] + t1 * p1[0]
-                y1 = (1 - t1) * p0[1] + t1 * p1[1]
-                x2 = (1 - t2) * p0[0] + t2 * p1[0]
-                y2 = (1 - t2) * p0[1] + t2 * p1[1]
-                print(f"2 intersections at: ({x1},{y1}) and ({x2},{y2})")
-                print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                if DEBUG: 
+                    print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
                 return center
         elif discrim == 0:
             t1 = (- b) / (2 * a)
-            print(f"t1: {t1}")
             if t1 >= 0 and t1 <= 1:
-                x1 = (1 - t1) * p0[0] + t1 * p1[0]
-                y1 = (1 - t1) * p0[1] + t1 * p1[1]
-                print(f"1 intersection at: ({x1},{y1})")
-                print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                if DEBUG:
+                    print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
                 return center
         # no intersection
         continue
@@ -857,7 +845,8 @@ def generate_path():
     # Randomly pick neighbour, continue with that neighbour
     random_start = random.randint(0, len(members) - 1)
     (member, members) = pick_member(members, random_start)
-    print(f"Starting with: {member}")
+    if DEBUG:
+        print(f"Starting with: {member}")
     path.append(member)
     # Pick rest of the members
     while len(path) < MEMBER_NUM:
