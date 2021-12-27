@@ -22,7 +22,7 @@ IMGFILEPATH = 'sample_img.png'
 MEMBER_NUM = 11
 # Number of points in a bezier curve
 # (The higher it is, the smoother curves will be at the expense of computation time)
-NUM_POINTS = 10
+NUM_POINTS = 15
 # Not very useful option
 EACH_MEMBER_ALL_NEIGHBOURS = True
 # Developer options
@@ -34,6 +34,7 @@ METHOD = Pathfinding.GREEDY_PICKING
 
 # Constants
 BEZIERIFY = False
+ADJUST_CONTROL_POINTS = False
 NUM_METHODS = len(Pathfinding)
 ARROWTIP_RATIO = 15
 GREEN = (0, 255, 0)
@@ -42,7 +43,7 @@ RED = (0, 0, 255)
 BLUE = (255, 0, 0)
 BLACK = (0, 0, 0)
 MEMBERS = []
-CIRCLE_RADIUS = 62
+CIRCLE_RADIUS = 67
 
 # Input: 2-tuple (etc. (0, 10), (15, 20))
 def get_distance_between(coords1, coords2):
@@ -631,18 +632,15 @@ def draw_arrows(path, img):
             print(f"First node: {prev_node.num}")
 
         if METHOD == Pathfinding.GREEDY_PICKING:
-            path = prev_node.get_greedy_path(member.node)
+            node_path = prev_node.get_greedy_path(member.node)
         elif METHOD == Pathfinding.DIJKSTRA or METHOD == Pathfinding.DIJKSTRA_WITH_OVERLAP:
-            path = prev_node.get_dijkstra_path(member.node)
+            node_path = prev_node.get_dijkstra_path(member.node)
 
         # Bezierify-ing lines
         if BEZIERIFY:
             # List of coordinates that do not correspond to any nodes
-            coords_lst = prev_node.get_bezier_path(path)
-            ctrl_pt = validate_path(coords_lst, prev, member)
-            print("control point that intersected:", ctrl_pt)
-            if ctrl_pt != 0:
-                print("at point:", coords_lst[ctrl_pt-1])
+            coords_lst = prev_node.get_bezier_path(node_path)
+            coords_lst = validate_path(coords_lst, prev, member, node_path)
             # Create temporary nodes that point to coords in Node.node_dict
             num_nodes = len(Node.node_dict)
             new_num = num_nodes + 1
@@ -653,7 +651,7 @@ def draw_arrows(path, img):
                 new_num += 1
             nodes.append(new_nodes)
         else:
-            nodes.append(path)
+            nodes.append(node_path)
 
         prev = member
     if DEBUG:
@@ -664,37 +662,63 @@ def draw_arrows(path, img):
     
     return new_img
 
-# Check each line segment and make sure no intersections with any members in image.
-# Ignore member itself.
-# Input: list of coordinates
+# Check each line segment and make sure no intersections with any other members in image.
+# Re-bezierifies path. Creates temporary nodes with new coords.
+# Input: list of coordinates, members involved in path, line path (list of node numbers)
 # Output: Integer that cooresponds to control point to be shifted, if 0 returned, no intersection
-def validate_path(coords_lst, member_from, member_to):
-    for i in range(len(coords_lst)):
+def validate_path(coords_lst, member_from, member_to, path):
+    new_coords_lst = []
+    i = 0
+    adjustmentFactor = 20
+    while i < len(coords_lst):
         if i == 0:
+            new_coords_lst.append(coords_lst[i])
+            i += 1
             continue
-        p0 = coords_lst[i-1]
+        p0 = new_coords_lst[i-1]
         p1 = coords_lst[i]
-        if test_intersection(p0, p1, member_from, member_to):
-            return i
-    return 0
+        
+        if ADJUST_CONTROL_POINTS:
+            intersectingMember = test_intersection(p0, p1, member_from, member_to)
+            # find closest node to intersecting circle, adjust and re-generate bezier curve
+            if intersectingMember:
+                (nodenum_to_adjust, node_index) = find_closest_node(path, intersectingMember)
+                node_coords = Node.node_dict[nodenum_to_adjust].coords
+                centerToPt = (node_coords[0] - intersectingMember[0], node_coords[1] - intersectingMember[1])
+                normCenterToPt = (centerToPt[0] / np.linalg.norm(centerToPt), centerToPt[1] / np.linalg.norm(centerToPt))
+                print("normCenterToPt:", normCenterToPt)
+                new_pos = (node_coords[0] + round(adjustmentFactor * normCenterToPt[0]), node_coords[1] + round(adjustmentFactor * normCenterToPt[1]))
+                print(f"Adjusting node: {nodenum_to_adjust} by {adjustmentFactor} x {normCenterToPt}")
+                adjustmentFactor /= 2 if not 1 else 1
+                
+                # create temp node to hold new_pos
+                num_nodes = len(Node.node_dict)
+                new_num = num_nodes + 1
+                new_node = Node(new_num, new_pos)
+                Node.node_dict[new_num] = new_node
+                print(f"node path before: {path}")
+                path.pop(node_index)
+                path.insert(node_index, new_node.num)
+                print(f"node path aft: {path}")
+                
+                # Reset params
+                coords_lst = member_from.node.get_bezier_path(path)
+                new_coords_lst = []
+                i = 0
+                continue 
+        new_coords_lst.append(p1)
+        i += 1
+    return new_coords_lst
 
 # Each member is approximated to a circle.
 # Input: 2 points of line segment to be tested for intersections
-# Output: T if any intersection, F if not
+# Putput: Coordinates of intersecting member if any, else None
 def test_intersection(p0, p1, member_from, member_to):
-    ray_dir = (p1[0] - p0[0], p1[1] - p0[1])
-    ray_origin = p0
     for member in MEMBERS:
         # Ignore member_from and member_to
         if member.name == member_from.name or member.name == member_to.name:
             continue
         center = member.coords
-        o_minus_c = (ray_origin[0] - center[0], ray_origin[1] - center[1])
-        # Need to change type to int64 to prevent overflow
-        # a = np.dot(ray_dir, ray_dir).astype(np.int64) # dir DOT dir
-        # b = 2 * np.dot(ray_dir, o_minus_c).astype(np.int64) # 2 * dir DOT (origin - center)
-        # c = np.dot(o_minus_c, o_minus_c).astype(np.int64) - CIRCLE_RADIUS * CIRCLE_RADIUS # (origin - c) DOT (origin - center) - radius^2
-        # discriminant = b * b - 4 * a * c
 
         # LERP between 2 points
         # x = (1-t)*x0 + t*x1
@@ -723,7 +747,7 @@ def test_intersection(p0, p1, member_from, member_to):
                 y1 = (1 - t) * p0[1] + t * p1[1]
                 print(f"1 intersection at: ({x1},{y1})")
                 print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
-                return True
+                return center
             # no intersection
             continue
         discrim = b * b - 4 * a * c
@@ -739,7 +763,7 @@ def test_intersection(p0, p1, member_from, member_to):
                 y2 = (1 - t2) * p0[1] + t2 * p1[1]
                 print(f"2 intersections at: ({x1},{y1}) and ({x2},{y2})")
                 print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
-                return True
+                return center
         elif discrim == 0:
             t1 = (- b) / (2 * a)
             print(f"t1: {t1}")
@@ -748,10 +772,33 @@ def test_intersection(p0, p1, member_from, member_to):
                 y1 = (1 - t1) * p0[1] + t1 * p1[1]
                 print(f"1 intersection at: ({x1},{y1})")
                 print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
-                return True
+                return center
         # no intersection
         continue
-    return False
+    return None
+
+# Start and end nodes are ignored so that the line does not shift!
+# Input: List of node numbers in path, coords to be compared with.
+# Output: Node number that is closest to given coords and its index in path
+def find_closest_node(path, coords):
+    closest_node = None
+    min_index = -1
+    index = 0
+    min_dist = sys.maxsize
+    for node_num in path:
+        if index == 0 or index == len(path) - 1:
+            index += 1
+            continue
+        dist = get_distance_between(Node.node_dict[node_num].coords, coords)
+        if dist < min_dist:
+            min_dist = dist
+            closest_node = node_num
+            min_index = index
+        index += 1
+    if closest_node == None:
+        # Can technically be because path contains only 2 nodes but 2 nodes between members should not intersect any other members.
+        raise AssertionError(f"No closest node found (path might be empty!)\nNode path:{path}")
+    return (closest_node, min_index)
 
 # Un-select all nodes
 def reset_node_status():
@@ -800,6 +847,7 @@ def generate_path():
     global DISPLAY_GRAPH
     global METHOD
     global BEZIERIFY
+    global ADJUST_CONTROL_POINTS
     path = []
     members = initialize_members()
     MEMBERS = members.copy()
@@ -830,6 +878,10 @@ def generate_path():
         path.append(next)
         members.remove(next)
         member = next
+    # For debugging, fix path to member 1 to n
+    # path = []
+    # for member in MEMBERS:
+    #     path.append(member)
     print("Final path: ", path)
 
     ## Stop if no input image
@@ -923,6 +975,17 @@ def generate_path():
             # Toggle Bezier-ification of current paths
             BEZIERIFY = not BEZIERIFY
             display_str = f"Converting {METHOD} path into Bezier curves!" if BEZIERIFY else f"Now using: {METHOD} without Bezier curves!"
+            print(display_str)
+            reset_node_status()
+            # re-draw 
+            image_to_show = draw_arrows(path, img)
+        elif k == ord("a"):
+            if not BEZIERIFY:
+                print("Not currently using Bezier curves! Nothing to adjust!")
+                continue
+            # Toggle auto-adjustment of Bezier control points
+            ADJUST_CONTROL_POINTS = not ADJUST_CONTROL_POINTS
+            display_str = f"Adjusting Bezier curves to not intersect any members!" if ADJUST_CONTROL_POINTS else f"Removing Bezier curve adjustments!"
             print(display_str)
             reset_node_status()
             # re-draw 
