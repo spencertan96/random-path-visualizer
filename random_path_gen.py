@@ -979,6 +979,12 @@ def generate_path():
             reset_node_status()
             # re-draw 
             image_to_show = draw_arrows(path, img)
+        # For developer use, keypress to save the final result as an image 
+        # elif k == ord("f"):
+        #     # Save image of final result
+        #     RESULTFILEPATH = "sample_result.png"
+        #     cv.imwrite(RESULTFILEPATH, image_to_show)
+        #     print(f"Graph saved in {RESULTFILEPATH}")
         elif k == ord("r"):
             is_current_config_saved = False
             generate_path()
