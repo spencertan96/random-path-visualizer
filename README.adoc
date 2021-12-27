@@ -26,6 +26,7 @@ endif::[]
 ifdef::env-github[]
 image:images/sample_result_dijkstra.png[width="400"]
 endif::[]
+
 + _The paths are more direct compared to the Greedy algorithm_
 
 * Path with *Dijkstra's algorithm* where nodes can be used *more* than once:
@@ -33,6 +34,7 @@ endif::[]
 ifdef::env-github[]
 image:images/sample_result_dijkstra_overlap.png[width="400"]
 endif::[]
+
 + _Notice the overlapped paths near E that might lead to visual clutter._
 
 * Path with *Dijkstra's algorithm* that have been converted to *Bezier curves*:
@@ -40,6 +42,7 @@ endif::[]
 ifdef::env-github[]
 image:images/sample_result_dijkstra_bezier.png[width="400"]
 endif::[]
+
 + _The paths are now smooth though there are a few overlaps on members' images._
 
 * Path with *Dijkstra's algorithm* as Bezier curves, adjusted for *minimal* overlapping:
@@ -47,6 +50,7 @@ endif::[]
 ifdef::env-github[]
 image:images/sample_result_dijkstra_bezier_adjusted.png[width="400"]
 endif::[]
+
 + _Notice the paths near E and D that have been shifted slightly._
 
 
