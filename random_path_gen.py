@@ -13,6 +13,11 @@ class Pathfinding(Enum):
     DIJKSTRA = 1
     DIJKSTRA_WITH_OVERLAP = 2
 
+@unique
+class MemberType(Enum):
+    CIRCLE = 0
+    SQUARE = 1
+
 # Adjustable options
 NO_IMAGE = False
 FILEPATH = 'sample_input.txt'
@@ -43,7 +48,6 @@ RED = (0, 0, 255)
 BLUE = (255, 0, 0)
 BLACK = (0, 0, 0)
 MEMBERS = []
-CIRCLE_RADIUS = 67
 
 # Input: 2-tuple (etc. (0, 10), (15, 20))
 def get_distance_between(coords1, coords2):
@@ -258,8 +262,10 @@ def lerp(coords1, coords2, t):
 class Member:
     # Each member is tied to a node
     # Unless there is no image as no node required
-    def __init__(self, name, node, neighbors = ()) -> None:
+    def __init__(self, name, type, size, node, neighbors = ()) -> None:
         self.name = name
+        self.type = type
+        self.size = size
         self.node = node if node else None
         self.coords = node.coords if node else None
         self.neighbors = neighbors
@@ -331,15 +337,7 @@ class Member:
 
 # Returns list of members that the path will be made out of
 def initialize_members():
-    members_names = read_simple_input_file(FILEPATH) if NO_IMAGE else read_input_file(FILEPATH) 
-
-    # Names and corresponding nodes
-    members = []
-    for i in range(MEMBER_NUM):
-        if NO_IMAGE:
-            members.append(Member(members_names[i], None))
-        else:
-            members.append(Member(members_names[i], Node.node_dict[i+1]))
+    members = read_simple_input_file(FILEPATH) if NO_IMAGE else read_input_file(FILEPATH) 
     print("Members:", members)
     return members
 
@@ -359,20 +357,22 @@ def read_simple_input_file(filepath):
                 continue
             names = text.split(",")
             MEMBER_NUM = len(names)
-            return names
+            members = []
+            for name in names:
+                members.append(Member(name, None))
+            return members
     else:
-        print("Input file {FILEPATH}' not found!")
-        quit()
+        raise AssertionError(f"Input file {FILEPATH}' not found!")
 
 # Read input file, populate Node.node_dict, return list of members
 def read_input_file(filepath):
     # Load from file
-    # Format: {MemberName}:{XCoordinate},{YCoordinate}
+    # Format: {MemberName}:{XCoordinate},{YCoordinate}:(C/S}{Size})
     #         {NodeNumber}:{XCoordinate},{YCoordinate}
     #         till empty line, then
     #         {NodeNumber}:{ConnectedNode},{ConnectedNode2}
     members_initialized = 0
-    names = []
+    members = []
     if os.path.exists(filepath):
         with open(filepath, 'r') as f:
             text = f.readline()
@@ -387,11 +387,21 @@ def read_input_file(filepath):
                 if members_initialized < MEMBER_NUM:
                     members_initialized += 1
                     node_num = members_initialized
-                    names.append(text[0])
+                    name = text[0]
+                    coords = text[1].split(",")
+                    if text[2][0].lower() == "s":
+                        type = MemberType.SQUARE
+                    elif text[2][0].lower() == "c":
+                        type = MemberType.CIRCLE
+                    else:
+                        raise AssertionError(f"Input Error! Not 'C' or 'S' for {name}'s representation type in '{FILEPATH}'!")
+                    size = int(text[2][1:])
+                    Node.node_dict[node_num] = Node(node_num, (int(coords[0]), int(coords[1])))
+                    members.append(Member(name, type, size, Node.node_dict[node_num]))
                 else: 
                     node_num = int(text[0])
-                coords = text[1].split(",")
-                Node.node_dict[node_num] = Node(node_num, (int(coords[0]), int(coords[1])))
+                    coords = text[1].split(",")
+                    Node.node_dict[node_num] = Node(node_num, (int(coords[0]), int(coords[1])))
                 # Attributes don't really matter, only need to track whether used or not through .selected
                 DijkstraNode.node_dict[node_num] = DijkstraNode(node_num, -1, -1)
                 text = f.readline()
@@ -414,9 +424,8 @@ def read_input_file(filepath):
         if DEBUG:
             Node.node_dict[1].print_edges()
     else:
-        print("Input file {FILEPATH}' not found!")
-        quit()
-    return names
+        raise AssertionError(f"Input file {FILEPATH}' not found!")
+    return members
 
 # Returns a dictionary of member: previously assigned member, or an empty dictionary if no previous assignment saved.
 def retrieve_prev_assignments():
@@ -716,53 +725,64 @@ def test_intersection(p0, p1, member_from, member_to):
             continue
         center = member.coords
 
-        # LERP between 2 points
-        # x = (1-t)*x0 + t*x1
-        # y = (1-t)*y0 + t*y1
-        # Find intersection between line and circle
-        # If 0 <= t <= 1, has intersection
-        # (x - h)^2 + (y - k)^2 = r^2
-        # Subst. x and y into eqn, solve for t
-        p0x_sq = p0[0] * p0[0]
-        p1x_sq = p1[0] * p1[0]
-        p0p1x = p0[0] * p1[0]
-        p0y_sq = p0[1] * p0[1]
-        p1y_sq = p1[1] * p1[1]
-        p0p1y = p0[1] * p1[1]
-        a = p0x_sq + p1x_sq - 2 * p0p1x + p0y_sq + p1y_sq - 2 * p0p1y
-        b = -2 * p0x_sq + 2 * p0p1x + 2 * p0[0] * center[0] - 2 * p1[0] * center[0] - 2 * p0y_sq + 2 * p0p1y + 2 * p0[1] * center[1] - 2 * p1[1] * center[1]
-        c = p0x_sq + center[0] * center[0] - 2 * p0[0] * center[0] + p0y_sq + center[1] * center[1] - 2 * p0[1] * center[1] - CIRCLE_RADIUS * CIRCLE_RADIUS
-        if a == 0:
-            # linear equation
-            if b == 0:
-                t = - c
-            else:
-                t = c / b
-            if t >= 0 and t <= 1:
-                x1 = (1 - t) * p0[0] + t * p1[0]
-                y1 = (1 - t) * p0[1] + t * p1[1]
-                if DEBUG: 
-                    print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
-                return center
+        if member.type == MemberType.CIRCLE:
+            # LERP between 2 points
+            # x = (1-t)*x0 + t*x1
+            # y = (1-t)*y0 + t*y1
+            # Find intersection between line and circle
+            # If 0 <= t <= 1, has intersection
+            # (x - h)^2 + (y - k)^2 = r^2
+            # Subst. x and y into eqn, solve for t
+            p0x_sq = p0[0] * p0[0]
+            p1x_sq = p1[0] * p1[0]
+            p0p1x = p0[0] * p1[0]
+            p0y_sq = p0[1] * p0[1]
+            p1y_sq = p1[1] * p1[1]
+            p0p1y = p0[1] * p1[1]
+            a = p0x_sq + p1x_sq - 2 * p0p1x + p0y_sq + p1y_sq - 2 * p0p1y
+            b = -2 * p0x_sq + 2 * p0p1x + 2 * p0[0] * center[0] - 2 * p1[0] * center[0] - 2 * p0y_sq + 2 * p0p1y + 2 * p0[1] * center[1] - 2 * p1[1] * center[1]
+            c = p0x_sq + center[0] * center[0] - 2 * p0[0] * center[0] + p0y_sq + center[1] * center[1] - 2 * p0[1] * center[1] - member.size * member.size
+            if a == 0:
+                # linear equation
+                if b == 0:
+                    t = - c
+                else:
+                    t = c / b
+                if t >= 0 and t <= 1:
+                    x1 = (1 - t) * p0[0] + t * p1[0]
+                    y1 = (1 - t) * p0[1] + t * p1[1]
+                    if DEBUG: 
+                        print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                    return center
+                # no intersection
+                continue
+            discrim = b * b - 4 * a * c
+            if discrim > 0:
+                sqrt_discrim = math.sqrt(discrim)
+                t1 = (- b - sqrt_discrim) / (2 * a)
+                t2 = (- b + sqrt_discrim) / (2 * a)
+                if (t1 >= 0 and t1 <= 1) or (t2 >= 0 and t2 <= 1):
+                    if DEBUG: 
+                        print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                    return center
+            elif discrim == 0:
+                t1 = (- b) / (2 * a)
+                if t1 >= 0 and t1 <= 1:
+                    if DEBUG:
+                        print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+                    return center
             # no intersection
             continue
-        discrim = b * b - 4 * a * c
-        if discrim > 0:
-            sqrt_discrim = math.sqrt(discrim)
-            t1 = (- b - sqrt_discrim) / (2 * a)
-            t2 = (- b + sqrt_discrim) / (2 * a)
-            if (t1 >= 0 and t1 <= 1) or (t2 >= 0 and t2 <= 1):
-                if DEBUG: 
-                    print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
+        elif member.type == MemberType.SQUARE:
+            # square intersection test
+            if point_in_square(p0, center, member.size):
                 return center
-        elif discrim == 0:
-            t1 = (- b) / (2 * a)
-            if t1 >= 0 and t1 <= 1:
-                if DEBUG:
-                    print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
-                return center
-        # no intersection
-        continue
+            else:
+                if point_in_square(p1, center, member.size):
+                    return center
+            continue
+        else:
+            raise AssertionError(f"Error! Invalid member representation type! Check input file {FILEPATH}!")
     return None
 
 # Start and end nodes are ignored so that the line does not shift!
@@ -787,6 +807,21 @@ def find_closest_node(path, coords):
         # Can technically be because path contains only 2 nodes but 2 nodes between members should not intersect any other members.
         raise AssertionError(f"No closest node found (path might be empty!)\nNode path:{path}")
     return (closest_node, min_index)
+
+# Input: Point to check, center of square, width of square
+# Output: Boolean
+def point_in_square(pt, center, width):
+    # make width even
+    width = width + 1 if width % 2 == 1 else width
+
+    left_x = center[0] - width/2
+    right_x = center[0] + width/2
+    top_y = center[1] - width/2
+    bottom_y = center[1] + width/2
+    if pt[0] > left_x and pt[0] < right_x:
+        if pt[1] > top_y and pt[1] < bottom_y:
+            return True 
+    return False
 
 # Un-select all nodes
 def reset_node_status():
