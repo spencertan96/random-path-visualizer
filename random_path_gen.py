@@ -262,10 +262,11 @@ def lerp(coords1, coords2, t):
 class Member:
     # Each member is tied to a node
     # Unless there is no image as no node required
-    def __init__(self, name, type, size, node, neighbors = ()) -> None:
+    def __init__(self, name, type, size, is_excluded, node, neighbors = ()) -> None:
         self.name = name
         self.type = type
         self.size = size
+        self.is_excluded = is_excluded
         self.node = node if node else None
         self.coords = node.coords if node else None
         self.neighbors = neighbors
@@ -313,7 +314,7 @@ class Member:
                     self.neighbors = intermediateLst
                     continue
 
-            if self.neighbors[index].selected:
+            if self.neighbors[index].selected or self.neighbors[index].is_excluded:
                 # ran out of choices
                 if len(self.neighbors) == 1:
                     if DEBUG:
@@ -337,8 +338,13 @@ class Member:
 
 # Returns list of members that the path will be made out of
 def initialize_members():
-    members = read_simple_input_file(FILEPATH) if NO_IMAGE else read_input_file(FILEPATH) 
-    print("Members:", members)
+    members = read_simple_input_file(FILEPATH) if NO_IMAGE else read_input_file(FILEPATH)
+    display_str = "["
+    for member in members:
+        is_excluded = " - Excluded" if member.is_excluded else ""
+        display_str += member.name + is_excluded + ", "
+    display_str = display_str[:-2] + "]" 
+    print("Members:", display_str)
     return members
 
 # Read input file, return list of members
@@ -397,7 +403,10 @@ def read_input_file(filepath):
                         raise AssertionError(f"Input Error! Not 'C' or 'S' for {name}'s representation type in '{FILEPATH}'!")
                     size = int(text[2][1:])
                     Node.node_dict[node_num] = Node(node_num, (int(coords[0]), int(coords[1])))
-                    members.append(Member(name, type, size, Node.node_dict[node_num]))
+                    if len(text) <= 3:
+                        members.append(Member(name, type, size, False, Node.node_dict[node_num]))
+                    else:
+                        members.append(Member(name, type, size, True, Node.node_dict[node_num]))
                 else: 
                     node_num = int(text[0])
                     coords = text[1].split(",")
@@ -528,10 +537,15 @@ def initialize_member_neighbours(members):
                 member.add_neighbor(neighbor)
             # member.print_neighbors()
 
-def pick_member(members, index):
-    member = members[index]
+def pick_member(members):
+    random_start = random.randint(0, len(members) - 1)
+    member = members[random_start]
+    while member.is_excluded:
+        members.pop(random_start)
+        random_start = random.randint(0, len(members) - 1)
+        member = members[random_start]
     member.selected = True
-    members.pop(index)
+    members.pop(random_start)
     return (member, members)
 
 def draw_points(nodeslst, img):
@@ -878,13 +892,12 @@ def generate_path():
     initialize_member_neighbours(members)
     # Pick random starting point
     # Randomly pick neighbour, continue with that neighbour
-    random_start = random.randint(0, len(members) - 1)
-    (member, members) = pick_member(members, random_start)
+    (member, members) = pick_member(members)
     if DEBUG:
         print(f"Starting with: {member}")
     path.append(member)
     # Pick rest of the members
-    while len(path) < MEMBER_NUM:
+    while members:
         next = member.get_next(prev_assignments)
         if next == None:
             # No solution, try for another solution
@@ -894,8 +907,7 @@ def generate_path():
             initialize_member_neighbours(members)
             # Pick random starting point
             # Randomly pick neighbour, continue with that neighbour
-            random_start = random.randint(0, len(members) - 1)
-            (member, members) = pick_member(members, random_start)
+            (member, members) = pick_member(members)
             print(f"Restarting with: {member}")
             path.append(member)
             continue
