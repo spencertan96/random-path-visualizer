@@ -327,6 +327,10 @@ class Member:
                 continue
             else:
                 break
+        # member should never have no neighbors, here to catch just in case
+        if len(self.neighbors) == 0:
+            print(f"{self.name} has no more unselected neighbours!")
+            return None
         member = self.neighbors[index]
         member.selected = True
         # remove selected neighbor
@@ -627,20 +631,6 @@ def draw_points(nodeslst, img):
     cv.putText(img, "START", startPos, cv.FONT_HERSHEY_SIMPLEX, 1, RED, 3, -1)
     cv.putText(img, "END", endPos, cv.FONT_HERSHEY_SIMPLEX, 1, RED, 3, -1)
 
-    # Display instructions
-    x_pos = 6
-    y_pos = 35
-    line_spacing = 40
-    instr_pos = []
-    for i in range(0, 6):
-        instr_pos.append((x_pos, y_pos + line_spacing * i))
-    cv.putText(img, "'Z'/'X' to switch algorithms", instr_pos[0], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
-    cv.putText(img, "'B' to toggle Bezier curves", instr_pos[1], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
-    cv.putText(img, "'A' to toggle line adjustment", instr_pos[2], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
-    cv.putText(img, "'S' to save current path", instr_pos[3], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
-    cv.putText(img, "'R' to re-generate", instr_pos[4], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
-    cv.putText(img, "'Q' to quit", instr_pos[5], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
-
     return img
 
 # Return a list of images with different paths based on the different pathfinding methods
@@ -694,6 +684,23 @@ def draw_arrows(path, img):
     new_img = draw_points(nodes, new_img)
     
     return new_img
+
+def display_instructions(img):
+    # Display instructions
+    x_pos = 6
+    y_pos = 25
+    line_spacing = 25
+    font_size = 0.6
+    instr_pos = []
+    for i in range(0, 6):
+        instr_pos.append((x_pos, y_pos + line_spacing * i))
+    cv.putText(img, "'Z'/'X' to switch algorithms", instr_pos[0], cv.FONT_HERSHEY_SIMPLEX, font_size, RED, 2, -1)
+    cv.putText(img, "'B' to toggle Bezier curves", instr_pos[1], cv.FONT_HERSHEY_SIMPLEX, font_size, RED, 2, -1)
+    cv.putText(img, "'A' to toggle line adjustment", instr_pos[2], cv.FONT_HERSHEY_SIMPLEX, font_size, RED, 2, -1)
+    cv.putText(img, "'S' to save current path", instr_pos[3], cv.FONT_HERSHEY_SIMPLEX, font_size, RED, 2, -1)
+    cv.putText(img, "'R' to re-generate", instr_pos[4], cv.FONT_HERSHEY_SIMPLEX, font_size, RED, 2, -1)
+    cv.putText(img, "'Q' to quit", instr_pos[5], cv.FONT_HERSHEY_SIMPLEX, font_size, RED, 2, -1)
+    return img
 
 # Check each line segment and make sure no intersections with any other members in image.
 # Re-bezierifies path. Creates temporary nodes with new coords.
@@ -931,6 +938,7 @@ def generate_path():
             # Reset everything
             path = []
             members = initialize_members()
+            members = remove_excluded_members(members)
             initialize_member_neighbours(members)
             # Pick random starting point
             # Randomly pick neighbour, continue with that neighbour
@@ -1003,6 +1011,7 @@ def generate_path():
             cv.putText(image_to_show, "Path saved!", saveNotifPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
         # resize img
         image_to_show = cv.resize(image_to_show, IMG_DIMENSIONS, interpolation = cv.INTER_AREA)
+        image_to_show = display_instructions(image_to_show)
         cv.imshow("Generated Path", image_to_show)
             
         k = cv.waitKey(0)
