@@ -318,7 +318,7 @@ class Member:
                 # ran out of choices
                 if len(self.neighbors) == 1:
                     if DEBUG:
-                        print("No neighbors available! Restarting path!")
+                        print(f"No neighbors available for {self.name}! Restarting path!")
                     return None
                 # update neighbor list
                 intermediateLst = list(self.neighbors)
@@ -439,6 +439,7 @@ def read_input_file(filepath):
 # Returns a dictionary of member: previously assigned member, or an empty dictionary if no previous assignment saved.
 def retrieve_prev_assignments():
     if not os.path.exists(SAVEFILEPATH):
+        print("No previous assignment found!")
         return dict()
     
     assignments = dict()
@@ -531,19 +532,27 @@ def initialize_member_neighbours(members):
     # Any neighbour
     else:
         for member in members:
+            if member.is_excluded:
+                continue
             for neighbor in members:
-                if member.name == neighbor.name:
+                if member.name == neighbor.name or neighbor.is_excluded:
                     continue
                 member.add_neighbor(neighbor)
             # member.print_neighbors()
 
+# Input: List of all members
+# Output: List of members without excluded ones
+def remove_excluded_members(members):
+    output = []
+    for member in members:
+        if member.is_excluded:
+            continue
+        output.append(member)
+    return output
+
 def pick_member(members):
     random_start = random.randint(0, len(members) - 1)
     member = members[random_start]
-    while member.is_excluded:
-        members.pop(random_start)
-        random_start = random.randint(0, len(members) - 1)
-        member = members[random_start]
     member.selected = True
     members.pop(random_start)
     return (member, members)
@@ -620,17 +629,17 @@ def draw_points(nodeslst, img):
 
     # Display instructions
     x_pos = 6
-    y_pos = 18
-    line_spacing = 20
+    y_pos = 35
+    line_spacing = 40
     instr_pos = []
     for i in range(0, 6):
         instr_pos.append((x_pos, y_pos + line_spacing * i))
-    cv.putText(img, "'Z'/'X' to switch algorithms", instr_pos[0], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
-    cv.putText(img, "'B' to toggle Bezier curves", instr_pos[1], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
-    cv.putText(img, "'A' to toggle line adjustment", instr_pos[2], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
-    cv.putText(img, "'S' to save current path", instr_pos[3], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
-    cv.putText(img, "'R' to re-generate", instr_pos[4], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
-    cv.putText(img, "'Q' to quit", instr_pos[5], cv.FONT_HERSHEY_SIMPLEX, 0.5, RED, 2, -1)
+    cv.putText(img, "'Z'/'X' to switch algorithms", instr_pos[0], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
+    cv.putText(img, "'B' to toggle Bezier curves", instr_pos[1], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
+    cv.putText(img, "'A' to toggle line adjustment", instr_pos[2], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
+    cv.putText(img, "'S' to save current path", instr_pos[3], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
+    cv.putText(img, "'R' to re-generate", instr_pos[4], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
+    cv.putText(img, "'Q' to quit", instr_pos[5], cv.FONT_HERSHEY_SIMPLEX, 1, RED, 2, -1)
 
     return img
 
@@ -661,7 +670,10 @@ def draw_arrows(path, img):
         if BEZIERIFY:
             # List of coordinates that do not correspond to any nodes
             coords_lst = prev_node.get_bezier_path(node_path)
-            coords_lst = validate_path(coords_lst, prev, member, node_path)
+            if ADJUST_CONTROL_POINTS:
+                print("Checking if any paths are invalid...")
+                coords_lst = validate_path(coords_lst, prev, member, node_path)
+                print("Correction done!")
             # Create temporary nodes that point to coords in Node.node_dict
             num_nodes = len(Node.node_dict)
             new_num = num_nodes + 1
@@ -699,32 +711,31 @@ def validate_path(coords_lst, member_from, member_to, path):
         p0 = new_coords_lst[i-1]
         p1 = coords_lst[i]
         
-        if ADJUST_CONTROL_POINTS:
-            intersectingMember = test_intersection(p0, p1, member_from, member_to)
-            # find closest node to intersecting circle, adjust and re-generate bezier curve
-            if intersectingMember:
-                (nodenum_to_adjust, node_index) = find_closest_node(path, intersectingMember)
-                node_coords = Node.node_dict[nodenum_to_adjust].coords
-                centerToPt = (node_coords[0] - intersectingMember[0], node_coords[1] - intersectingMember[1])
-                normCenterToPt = (centerToPt[0] / np.linalg.norm(centerToPt), centerToPt[1] / np.linalg.norm(centerToPt))
-                new_pos = (node_coords[0] + round(adjustmentFactor * normCenterToPt[0]), node_coords[1] + round(adjustmentFactor * normCenterToPt[1]))
-                if DEBUG:
-                    print(f"Adjusting node: {nodenum_to_adjust} by {adjustmentFactor} x {normCenterToPt}")
-                adjustmentFactor /= 2 if not 1 else 1
-                
-                # create temp node to hold new_pos
-                num_nodes = len(Node.node_dict)
-                new_num = num_nodes + 1
-                new_node = Node(new_num, new_pos)
-                Node.node_dict[new_num] = new_node
-                path.pop(node_index)
-                path.insert(node_index, new_node.num)
-                
-                # Reset params
-                coords_lst = member_from.node.get_bezier_path(path)
-                new_coords_lst = []
-                i = 0
-                continue 
+        intersectingMember = test_intersection(p0, p1, member_from, member_to)
+        # find closest node to intersecting circle, adjust and re-generate bezier curve
+        if intersectingMember:
+            (nodenum_to_adjust, node_index) = find_closest_node(path, intersectingMember)
+            node_coords = Node.node_dict[nodenum_to_adjust].coords
+            centerToPt = (node_coords[0] - intersectingMember[0], node_coords[1] - intersectingMember[1])
+            normCenterToPt = (centerToPt[0] / np.linalg.norm(centerToPt), centerToPt[1] / np.linalg.norm(centerToPt))
+            new_pos = (node_coords[0] + round(adjustmentFactor * normCenterToPt[0]), node_coords[1] + round(adjustmentFactor * normCenterToPt[1]))
+            if DEBUG:
+                print(f"Adjusting node: {nodenum_to_adjust} by {adjustmentFactor} x {normCenterToPt}")
+            adjustmentFactor /= 2 if not 1 else 1
+            
+            # create temp node to hold new_pos
+            num_nodes = len(Node.node_dict)
+            new_num = num_nodes + 1
+            new_node = Node(new_num, new_pos)
+            Node.node_dict[new_num] = new_node
+            path.pop(node_index)
+            path.insert(node_index, new_node.num)
+            
+            # Reset params
+            coords_lst = member_from.node.get_bezier_path(path)
+            new_coords_lst = []
+            i = 0
+            continue 
         new_coords_lst.append(p1)
         i += 1
     return new_coords_lst
@@ -866,6 +877,17 @@ def display_graph(img):
         for node_to in node.connected_nodes:
             graph_img = cv.line(graph_img, Node.node_dict[node.num].coords, Node.node_dict[node_to].coords,
                     (0, 255, 0), 3, -1, 0)
+
+    # draw outlines of members
+    for member in MEMBERS:
+        if member.type == MemberType.CIRCLE:
+            graph_img = cv.circle(graph_img, member.coords, member.size, RED, 2)
+        elif member.type == MemberType.SQUARE:
+            top_left = (round(member.coords[0] - member.size / 2), round(member.coords[1] - member.size / 2))
+            bottom_right = (round(member.coords[0] + member.size / 2), round(member.coords[1] + member.size / 2))
+            graph_img = cv.rectangle(graph_img, top_left, bottom_right, RED, 2)
+        else:
+            raise AssertionError(f"Error! Invalid member representation type! Check input file {FILEPATH}!")
     
     for node in Node.node_dict.values():
         # annotate each node with its num
@@ -876,7 +898,9 @@ def display_graph(img):
         # draw node as dot
         graph_img = cv.circle(graph_img, node.coords, radius=2, color=RED, thickness=-1)
 
-    cv.imshow("Edges drawn", graph_img)
+    # resize img
+    graph_img = cv.resize(graph_img, IMG_DIMENSIONS, interpolation = cv.INTER_AREA)
+    cv.imshow("Graph Structure", graph_img)
     return graph_img
 
 def generate_path():
@@ -888,6 +912,7 @@ def generate_path():
     path = []
     members = initialize_members()
     MEMBERS = members.copy()
+    members = remove_excluded_members(members)
     prev_assignments = retrieve_prev_assignments()
     initialize_member_neighbours(members)
     # Pick random starting point
@@ -900,6 +925,8 @@ def generate_path():
     while members:
         next = member.get_next(prev_assignments)
         if next == None:
+            if DEBUG:
+                print(f"Failed path:{path}")
             # No solution, try for another solution
             # Reset everything
             path = []
@@ -974,6 +1001,8 @@ def generate_path():
         if is_current_config_saved:
             saveNotifPos = (10, 530)
             cv.putText(image_to_show, "Path saved!", saveNotifPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
+        # resize img
+        image_to_show = cv.resize(image_to_show, IMG_DIMENSIONS, interpolation = cv.INTER_AREA)
         cv.imshow("Generated Path", image_to_show)
             
         k = cv.waitKey(0)
@@ -1026,6 +1055,7 @@ def generate_path():
             reset_node_status()
             # re-draw 
             image_to_show = draw_arrows(path, img)
+            print("Adjustment done! Drawing new image now...")
         # For developer use, keypress to save the final result as an image 
         # elif k == ord("f"):
         #     # Save image of final result
