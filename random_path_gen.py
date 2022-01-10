@@ -23,8 +23,14 @@ NO_IMAGE = False
 FILEPATH = 'sample_input.txt'
 SAVEFILEPATH = 'sample_previous_path.txt'
 IMGFILEPATH = 'sample_img.png'
+# FILEPATH = 'showcase_input.txt'
+# SAVEFILEPATH = 'showcase_previous_path.txt'
+# IMGFILEPATH = 'sample_map.jpg'
+IMG_DIMENSIONS = [(1000,750), (1200,900), (1400,1050), (1600,1200)]
+CURR_DIMENSION_INDEX = 0
 # Only matters if NO_IMAGE is False
 MEMBER_NUM = 11
+# MEMBER_NUM = 18
 # Number of points in a bezier curve
 # (The higher it is, the smoother curves will be at the expense of computation time)
 NUM_POINTS = 15
