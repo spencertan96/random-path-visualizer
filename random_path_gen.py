@@ -661,9 +661,9 @@ def draw_arrows(path, img):
             # List of coordinates that do not correspond to any nodes
             coords_lst = prev_node.get_bezier_path(node_path)
             if ADJUST_CONTROL_POINTS:
-                print("Checking if any paths are invalid...")
+                print(f"Checking if path {prev} to {member} is invalid...")
                 coords_lst = validate_path(coords_lst, prev, member, node_path)
-                print("Correction done!")
+                print(f"Correction done from {prev} to {member}!")
             # Create temporary nodes that point to coords in Node.node_dict
             num_nodes = len(Node.node_dict)
             new_num = num_nodes + 1
@@ -906,7 +906,7 @@ def display_graph(img):
         graph_img = cv.circle(graph_img, node.coords, radius=2, color=RED, thickness=-1)
 
     # resize img
-    graph_img = cv.resize(graph_img, IMG_DIMENSIONS, interpolation = cv.INTER_AREA)
+    graph_img = cv.resize(graph_img, IMG_DIMENSIONS[CURR_DIMENSION_INDEX], interpolation = cv.INTER_AREA)
     cv.imshow("Graph Structure", graph_img)
     return graph_img
 
@@ -916,6 +916,7 @@ def generate_path():
     global METHOD
     global BEZIERIFY
     global ADJUST_CONTROL_POINTS
+    global CURR_DIMENSION_INDEX
     path = []
     members = initialize_members()
     MEMBERS = members.copy()
@@ -1005,16 +1006,19 @@ def generate_path():
     image_to_show = draw_arrows(path, img)
     
     is_current_config_saved = False
+    # Platform-dependent, might only work on Windows
+    KEYCODE_UP = 2490368
+    KEYCODE_DOWN = 2621440
     while True:
         if is_current_config_saved:
             saveNotifPos = (10, 530)
             cv.putText(image_to_show, "Path saved!", saveNotifPos, cv.FONT_HERSHEY_SIMPLEX, 0.6, RED, 2, -1)
         # resize img
-        image_to_show = cv.resize(image_to_show, IMG_DIMENSIONS, interpolation = cv.INTER_AREA)
-        image_to_show = display_instructions(image_to_show)
-        cv.imshow("Generated Path", image_to_show)
+        resized_img = cv.resize(image_to_show, IMG_DIMENSIONS[CURR_DIMENSION_INDEX], interpolation = cv.INTER_AREA)
+        resized_img = display_instructions(resized_img)
+        cv.imshow("Generated Path", resized_img)
             
-        k = cv.waitKey(0)
+        k = cv.waitKeyEx(0)
         # If "x" key pressed, close image
         if k == ord("q"):
             break
@@ -1071,6 +1075,18 @@ def generate_path():
         #     RESULTFILEPATH = "sample_result.png"
         #     cv.imwrite(RESULTFILEPATH, image_to_show)
         #     print(f"Graph saved in {RESULTFILEPATH}")
+        elif k == KEYCODE_UP:
+            if CURR_DIMENSION_INDEX == len(IMG_DIMENSIONS):
+                print(f"Already at largest window size!")
+            else:
+                CURR_DIMENSION_INDEX += 1
+                print(f"Now using {CURR_DIMENSION_INDEX}-th window size!")
+        elif k == KEYCODE_DOWN:
+            if CURR_DIMENSION_INDEX == 0:
+                print(f"Already at smallest window size!")
+            else:
+                CURR_DIMENSION_INDEX -= 1
+                print(f"Now using {CURR_DIMENSION_INDEX}-th window size!")
         elif k == ord("r"):
             is_current_config_saved = False
             generate_path()
