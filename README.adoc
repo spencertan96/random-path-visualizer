@@ -1,4 +1,4 @@
-= Random Path Generator
+= Random Path Visualizer
 
 This is a personal project that was initially started to automate the creation of permutations for my cell group for prayer purposes. I then decided to repurpose it into a generic path generator and also experiment with different ways to connect nodes in a graph to look more like a smooth curve.
 A visual representation of the generated path can be shown by providing an image along with an input file that will dictate the possible paths that can be drawn on the image.
