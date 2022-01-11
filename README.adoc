@@ -6,7 +6,7 @@ A visual representation of the generated path can be shown by providing an image
 Currently, the generator has 2 main methods to draw the paths between each member.
 
  . A *greedy* node selector that uses Euclidean distance heuristic that is *not* guaranteed to return a path. It does not use the *same* node twice for drawing so that no lines overlap completely with each other.
- . *Dijkstra's shortest path algorithm* from each member to the next. Users can toggle between allowing usage of the *same* node twice, to compare between the different output.
+ . *Dijkstra's shortest path algorithm* from each member to the next, uses Euclidean distance heuristic to improve its speed. Users can toggle between allowing usage of the *same* node twice, to compare between the different output.
 
 It also has an option to convert the current paths that are stiff-looking into *smooth* Bezier curves.
 
@@ -61,6 +61,8 @@ _Notice the paths near E and D that have been shifted slightly._
 * Type `A` to adjust Bezier curves to *minimally* intersect other members on the image _(only when Bezier curves are being used)_
 * Type `R` to generate a new path
 * Type `S` to save the current path (to prevent future path generation to repeat any pairs)
+* Type `UP ARROWKEY` to increase the size of the image window
+* Type `DOWN ARROWKEY` to decrease the size of the image window
 * Type `Q` to quit
 
 === Features
@@ -74,6 +76,7 @@ _(sample input for 11 members is provided)_
 === Inputs:
 * Text file with list of members (`sample_input2.txt`)
 ** Intermediate nodes and all nodes' pixel locations followed by the adjacency list of each node (only required if visualization is desired) (`sample_input.txt` *instead* of `sample_input2.txt`)
+Also can specify member image shape and size
 * Image with members represented (only required if visualization is desired) (`sample_img.png`)
 * Total number of members (only required if visualization is desired) (Edited in `random_path_generator.py`)
 
@@ -85,10 +88,13 @@ _Nodes in the graph comprise of each member *AND* intermediate nodes that will f
 [source,python]
 ----
 # Example in sample_input.txt
-# Each node's pixel location
+# Each member's pixel location
 # Start with members, then intermediate nodes
-[MemberName]:[PixelX],[PixelY]
-[MemberName2]:[PixelX],[PixelY]
+# Members: C if a circle is closer to the member's representation in the image and S for a square representation
+#          Size refers to the radius for a Circle or width for a Square, in pixels
+# Add a ':X' at the end of a member's line to indicate that it will not be part of a path but will be an obstacle for paths to avoid
+[MemberName]:[PixelX],[PixelY]:[C/S][Size][:X if member is an obstacle]
+[MemberName2]:[PixelX],[PixelY]:[C/S][Size][:X if member is an obstacle]
 [NodeNumber]:[PixelX],[PixelY]
 [NodeNumber2]:[PixelX],[PixelY]
 
