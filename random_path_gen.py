@@ -715,7 +715,10 @@ def display_instructions(img):
 def validate_path(coords_lst, member_from, member_to, path):
     new_coords_lst = []
     i = 0
-    adjustmentFactor = 20
+    # Goes from 30, 20, 15, 10, 5, 4, 3, 2, 2...
+    adjustment_factor = 30
+    # Reduce adjustment factor only when same member intersecting
+    previous_intersecting_mem = None
     while i < len(coords_lst):
         if i == 0:
             new_coords_lst.append(coords_lst[i])
@@ -724,17 +727,40 @@ def validate_path(coords_lst, member_from, member_to, path):
         p0 = new_coords_lst[i-1]
         p1 = coords_lst[i]
         
-        intersectingMember = test_intersection(p0, p1, member_from, member_to)
+        (intersecting_member, closest_point) = test_intersection(p0, p1, member_from, member_to)
         # find closest node to intersecting circle, adjust and re-generate bezier curve
-        if intersectingMember:
-            (nodenum_to_adjust, node_index) = find_closest_node(path, intersectingMember)
-            node_coords = Node.node_dict[nodenum_to_adjust].coords
-            centerToPt = (node_coords[0] - intersectingMember[0], node_coords[1] - intersectingMember[1])
-            normCenterToPt = (centerToPt[0] / np.linalg.norm(centerToPt), centerToPt[1] / np.linalg.norm(centerToPt))
-            new_pos = (node_coords[0] + round(adjustmentFactor * normCenterToPt[0]), node_coords[1] + round(adjustmentFactor * normCenterToPt[1]))
+        # Circle: Adjusts using adjust_factor * (circle.center to node) vector
+        # Square: Adjusts by shifting towards vector: adjust_factor * norm(square.center to closest square.corner)
+        if intersecting_member:
+            if intersecting_member.type == MemberType.CIRCLE:
+                (nodenum_to_adjust, node_index) = find_closest_node(path, closest_point)
+                node_coords = Node.node_dict[nodenum_to_adjust].coords
+                centerToPt = (node_coords[0] - closest_point[0], node_coords[1] - closest_point[1])
+                adjust_vec = normalize(centerToPt)
+                new_pos = (node_coords[0] + round(adjustment_factor * adjust_vec[0]), node_coords[1] + round(adjustment_factor * adjust_vec[1]))
+            elif intersecting_member.type == MemberType.SQUARE:
+                (nodenum_to_adjust, node_index) = find_closest_node(path, closest_point)
+                node_coords = Node.node_dict[nodenum_to_adjust].coords
+                corner = find_closest_corner(intersecting_member, node_coords)
+                node_to_corner = normalize((corner[0] - node_coords[0], corner[1] - node_coords[1]))
+                center_to_corner = normalize((corner[0] - intersecting_member.coords[0], corner[1] - intersecting_member.coords[1]))
+                OUTWARD_FACTOR = 2
+                adjust_vec = (node_to_corner[0] + OUTWARD_FACTOR * center_to_corner[0], node_to_corner[1] + OUTWARD_FACTOR * center_to_corner[1])
+                new_pos = (node_coords[0] + round(adjustment_factor * adjust_vec[0]), node_coords[1] + round(adjustment_factor * adjust_vec[1]))
+
+                print(f"Adjusting node: {nodenum_to_adjust} by {adjustment_factor} x {adjust_vec}")
             if DEBUG:
-                print(f"Adjusting node: {nodenum_to_adjust} by {adjustmentFactor} x {normCenterToPt}")
-            adjustmentFactor /= 2 if not 1 else 1
+                print(f"Adjusting node: {nodenum_to_adjust} by {adjustment_factor} x {adjust_vec}")
+            if previous_intersecting_mem and previous_intersecting_mem == intersecting_member:
+                # big decrease till 5, small decrease till 1
+                if adjustment_factor > 6:
+                    adjustment_factor -= 5
+                else:
+                    adjustment_factor -= 1 if adjustment_factor > 2.5 else 0
+            else:
+                previous_intersecting_mem = intersecting_member
+                # after first adjustment
+                adjustment_factor = 20
             
             # create temp node to hold new_pos
             num_nodes = len(Node.node_dict)
@@ -755,7 +781,7 @@ def validate_path(coords_lst, member_from, member_to, path):
 
 # Each member is approximated to a circle.
 # Input: 2 points of line segment to be tested for intersections
-# Putput: Coordinates of intersecting member if any, else None
+# Output: Intersecting member if any, else None
 def test_intersection(p0, p1, member_from, member_to):
     for member in MEMBERS:
         # Ignore member_from and member_to
@@ -791,7 +817,7 @@ def test_intersection(p0, p1, member_from, member_to):
                     y1 = (1 - t) * p0[1] + t * p1[1]
                     if DEBUG: 
                         print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
-                    return center
+                    return (member, center)
                 # no intersection
                 continue
             discrim = b * b - 4 * a * c
@@ -802,26 +828,28 @@ def test_intersection(p0, p1, member_from, member_to):
                 if (t1 >= 0 and t1 <= 1) or (t2 >= 0 and t2 <= 1):
                     if DEBUG: 
                         print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
-                    return center
+                    return (member, center)
             elif discrim == 0:
                 t1 = (- b) / (2 * a)
                 if t1 >= 0 and t1 <= 1:
                     if DEBUG:
                         print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
-                    return center
+                    return (member, center)
             # no intersection
             continue
         elif member.type == MemberType.SQUARE:
             # square intersection test
             if point_in_square(p0, center, member.size):
-                return center
+                intersection = get_square_intersection(p0, p1, member)
+                return (member, intersection)
             else:
                 if point_in_square(p1, center, member.size):
-                    return center
+                    intersection = get_square_intersection(p1, p0, member)
+                    return (member, intersection)
             continue
         else:
             raise AssertionError(f"Error! Invalid member representation type! Check input file {FILEPATH}!")
-    return None
+    return (None, None)
 
 # Start and end nodes are ignored so that the line does not shift!
 # Input: List of node numbers in path, coords to be compared with.
@@ -860,6 +888,112 @@ def point_in_square(pt, center, width):
         if pt[1] > top_y and pt[1] < bottom_y:
             return True 
     return False
+
+# Find coordinates of intersection between line segment (p0, p1) and square member.
+# p0 is guaranteed to be in the square.
+# Input: 2 points and the intersecting square
+# Output: Coords of intersection
+def get_square_intersection(p0, p1, sq):
+    # checks to determine which side of square intersected, 0 = top, 1 = right, 2 = bottom, 3 = left
+    # Use parametric equation to find next coordinate (x or y)
+    # make width even
+    width = sq.size + 1 if sq.size % 2 == 1 else sq.size
+
+    left_x = sq.coords[0] - width/2
+    right_x = sq.coords[0] + width/2
+    top_y = sq.coords[1] - width/2
+    bottom_y = sq.coords[1] + width/2
+
+    # handle edge cases
+    if p1[0] == p0[0]:
+        # vertical line, top or bottom
+        if bottom_y > p0[1] and bottom_y > p1[1]:
+            side = 0
+            return (p0[0], top_y)
+        else:
+            side = 2
+            return (p0[0], bottom_y)
+    elif p1[1] == p0[1]:
+        # horizontal line, right or left
+        if right_x > p0[0] and right_x / 2 > p1[0]:
+            side = 3
+            return (left_x, p0[1])
+        else:
+            side = 1
+            return (right_x, p0[1])
+    
+    grad = (p1[1] - p0[1]) / (p1[0] - p0[0])
+    if p0[0] - p1[0] > 0: # p1 | p0 |
+        if grad > 0:
+            # bottom/left
+            x = ((bottom_y - p1[1]) / grad) + p1[0]
+            if x > left_x:
+                side = 2
+            else:
+                side = 3
+        else:
+            # top/left
+            x = ((top_y - p1[1]) / grad) + p1[0]
+            if x > left_x:
+                side = 0
+            else:
+                side = 3
+    else: # | p0 | p1
+        if grad > 0:
+            # top/right
+            x = ((top_y - p1[1]) / grad) + p1[0]
+            if x < right_x:
+                side = 0
+            else:
+                side = 1
+        else:
+            # bottom/right
+            x = ((bottom_y - p1[1]) / grad) + p1[0]
+            if x < right_x:
+                side = 2
+            else:
+                side = 1
+    if side == 0:
+        y = top_y
+        x = ((y - p1[1]) / grad) + p1[0]
+        return (x, y)
+    elif side == 1:
+        x = right_x
+        y = grad * (x - p1[0]) + p1[1]
+        return (x, y)
+    elif side == 2:
+        y = bottom_y
+        x = ((y - p1[1]) / grad) + p1[0]
+        return (x, y)
+    elif side == 3:
+        x = left_x
+        y = grad * (x - p1[0]) + p1[1]
+        return (x, y)
+
+# Input: Square, point to check against
+# Output: Coords of closest corner
+def find_closest_corner(sq, pt):
+    # make width even
+    width = sq.size + 1 if sq.size % 2 == 1 else sq.size
+    left_x = sq.coords[0] - width/2
+    right_x = sq.coords[0] + width/2
+    top_y = sq.coords[1] - width/2
+    bottom_y = sq.coords[1] + width/2
+    corners = [(left_x, bottom_y), (left_x, top_y), (right_x, top_y), (right_x, bottom_y)]
+    min_dist = sys.maxsize
+    closest = (0, 0)
+    for corner in corners:
+        dist = get_distance_between(pt, corner)
+        if dist < min_dist:
+            min_dist = dist
+            closest = corner
+    return closest
+
+# Input: 2D-vector to normalise
+# Output: Normalized vector
+def normalize(vec):
+    magnitude = math.sqrt(vec[0] * vec[0] + vec[1] * vec[1])            
+    return (vec[0] / magnitude, vec[1] / magnitude)
 
 # Un-select all nodes
 def reset_node_status():
