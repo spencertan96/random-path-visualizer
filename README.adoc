@@ -1,6 +1,5 @@
 = Random Path Visualizer
 
-+
 ifdef::env-github[]
 image:images/showcase_overlap_adjusted.png[width="700"]
 endif::[]
@@ -16,7 +15,6 @@ Currently, the generator has 2 main methods to draw the paths between each membe
 It also has an option to convert the current paths that are stiff-looking into *smooth* Bezier curves.
 
 Lastly, it has an option to _adjust_ the Bezier curves created to *minimally* intersect any other members on the final image. This can be seen by comparing the image above *(adjusted)* and the un-adjusted image below.
-+
 ifdef::env-github[]
 image:images/showcase_overlap.png[width="700"]
 endif::[]
