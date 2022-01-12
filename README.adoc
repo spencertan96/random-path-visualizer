@@ -1,4 +1,5 @@
 = Random Path Visualizer
+
 +
 ifdef::env-github[]
 image:images/showcase_overlap_adjusted.png[width="700"]
