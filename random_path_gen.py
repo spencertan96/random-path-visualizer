@@ -54,6 +54,8 @@ RED = (0, 0, 255)
 BLUE = (255, 0, 0)
 BLACK = (0, 0, 0)
 MEMBERS = []
+# to deal with floating point inaccuracies
+EPSILON = 0.0000001
 
 # Input: 2-tuple (etc. (0, 10), (15, 20))
 def get_distance_between(coords1, coords2):
@@ -215,35 +217,24 @@ class Node:
 
     # Input: A path (list of node_nums)
     # Use points in path as control points to generate a bezier curve.
+    # Split nodes into groups of 3 to make quadratic bezier curves and connect them to make path.
     # Get points from curve at segments of t.
     # Output: List of coordinates as tuples
     def get_bezier_path(self, path):
         seq = []
-        t_steps = 1 / NUM_POINTS
-        t = 0
-        while t <= 1:
-            arr = []
-            arr2 = []
-            # Initialize array with first set of LERPs, path needs to and is guaranteed to be > 2 nodes
-            # path first contains node_nums
-            for i in range(len(path)):
-                if i == 0:
-                    continue
-                # add LERPS to arr
-                val = lerp(Node.node_dict[path[i-1]].coords, Node.node_dict[path[i]].coords, t)
-                arr.append(val)
-            # Arr should now be filled with coordinates
-            while len(arr) > 1:
-                for i in range(len(arr)):
-                    if i == 0:
-                        continue
-                    val = lerp(arr[i-1], arr[i], t)
-                    arr2.append(val)
-                arr = arr2.copy()
-                arr2 = []
-            rounded_coords = (round(arr[0][0]), round(arr[0][1]))
-            seq.append(rounded_coords)
-            t += t_steps
+        paths = []
+        for i in range(0, len(path), 3):
+            next_index = i + 3
+            next_path_len = len(path[next_index:])
+            if next_path_len <= 2:
+                # combine with current path and end
+                paths.append(path[i:])
+                break
+            else:
+                paths.append(path[i:i+3])
+        for path in paths:
+            # get bezier curve for each path
+            seq.extend(get_bezier_points(path))
         return seq
 
 # Takes in a DijkstraNode and PQ, calculates new distance and pushes into PQ
@@ -263,6 +254,37 @@ def lerp(coords1, coords2, t):
     x = round(coords1[0] * (1 - t) + coords2[0] * t, 2)
     y = round(coords1[1] * (1 - t) + coords2[1] * t, 2)
     return (x, y)
+
+# Input: Control points for bezier curve
+# Output: List of points that make up bezier curve (NUM_POINTS points in curve)
+def get_bezier_points(ctrl_pts):
+    seq = []
+    t_steps = 1 / (NUM_POINTS - 1)
+    t = 0
+    while t <= 1 + EPSILON:
+        arr = []
+        arr2 = []
+        # Initialize array with first set of LERPs, path needs to and is guaranteed to be > 2 nodes
+        # path first contains node_nums
+        for i in range(len(ctrl_pts)):
+            if i == 0:
+                continue
+            # add LERPS to arr
+            val = lerp(Node.node_dict[ctrl_pts[i-1]].coords, Node.node_dict[ctrl_pts[i]].coords, t)
+            arr.append(val)
+        # Arr should now be filled with coordinates
+        while len(arr) > 1:
+            for i in range(len(arr)):
+                if i == 0:
+                    continue
+                val = lerp(arr[i-1], arr[i], t)
+                arr2.append(val)
+            arr = arr2.copy()
+            arr2 = []
+        rounded_coords = (round(arr[0][0]), round(arr[0][1]))
+        seq.append(rounded_coords)
+        t += t_steps
+    return seq
 
 # Each member has a name.
 class Member:
@@ -667,9 +689,11 @@ def draw_arrows(path, img):
             # List of coordinates that do not correspond to any nodes
             coords_lst = prev_node.get_bezier_path(node_path)
             if ADJUST_CONTROL_POINTS:
-                print(f"Checking if path {prev} to {member} is invalid...")
+                if DEBUG:
+                    print(f"Checking if path {prev} to {member} is invalid...")
                 coords_lst = validate_path(coords_lst, prev, member, node_path)
-                print(f"Correction done from {prev} to {member}!")
+                if DEBUG:
+                    print(f"Correction done from {prev} to {member}!")
             # Create temporary nodes that point to coords in Node.node_dict
             num_nodes = len(Node.node_dict)
             new_num = num_nodes + 1
@@ -715,7 +739,7 @@ def display_instructions(img):
 def validate_path(coords_lst, member_from, member_to, path):
     new_coords_lst = []
     i = 0
-    # Goes from 30, 20, 15, 10, 5, 4, 3, 2, 2...
+    # Decreases by 20% each adjustment on the same node
     adjustment_factor = 30
     # Reduce adjustment factor only when same member intersecting
     previous_intersecting_mem = None
@@ -732,6 +756,13 @@ def validate_path(coords_lst, member_from, member_to, path):
         # Circle: Adjusts using adjust_factor * (circle.center to node) vector
         # Square: Adjusts by shifting towards vector: adjust_factor * norm(square.center to closest square.corner)
         if intersecting_member:
+            # Adjustment factor
+            if previous_intersecting_mem and previous_intersecting_mem == intersecting_member:
+                adjustment_factor = 0.8 * adjustment_factor if adjustment_factor > 2.5 else 2
+            else:
+                previous_intersecting_mem = intersecting_member
+                adjustment_factor = 30
+
             if intersecting_member.type == MemberType.CIRCLE:
                 (nodenum_to_adjust, node_index) = find_closest_node(path, closest_point)
                 node_coords = Node.node_dict[nodenum_to_adjust].coords
@@ -742,26 +773,17 @@ def validate_path(coords_lst, member_from, member_to, path):
                 (nodenum_to_adjust, node_index) = find_closest_node(path, closest_point)
                 node_coords = Node.node_dict[nodenum_to_adjust].coords
                 corner = find_closest_corner(intersecting_member, node_coords)
-                node_to_corner = normalize((corner[0] - node_coords[0], corner[1] - node_coords[1]))
-                center_to_corner = normalize((corner[0] - intersecting_member.coords[0], corner[1] - intersecting_member.coords[1]))
-                OUTWARD_FACTOR = 2
-                adjust_vec = (node_to_corner[0] + OUTWARD_FACTOR * center_to_corner[0], node_to_corner[1] + OUTWARD_FACTOR * center_to_corner[1])
+                # node_to_corner = normalize((corner[0] - node_coords[0], corner[1] - node_coords[1]))
+                # center_to_corner = normalize((corner[0] - intersecting_member.coords[0], corner[1] - intersecting_member.coords[1]))
+                center_to_node = normalize((node_coords[0] - intersecting_member.coords[0], node_coords[1] - intersecting_member.coords[1]))
+                # OUTWARD_FACTOR = 2
+                # adjust_vec = (node_to_corner[0] + OUTWARD_FACTOR * center_to_corner[0], node_to_corner[1] + OUTWARD_FACTOR * center_to_corner[1])
+                adjust_vec = center_to_node
                 new_pos = (node_coords[0] + round(adjustment_factor * adjust_vec[0]), node_coords[1] + round(adjustment_factor * adjust_vec[1]))
-
-                print(f"Adjusting node: {nodenum_to_adjust} by {adjustment_factor} x {adjust_vec}")
+                print(f"Moving N{nodenum_to_adjust} by {adjustment_factor:.1f}x({adjust_vec[0]:.3f}, {adjust_vec[1]:.3f}) from {member_from} to {member_to} avoiding {intersecting_member}")
+            
             if DEBUG:
                 print(f"Adjusting node: {nodenum_to_adjust} by {adjustment_factor} x {adjust_vec}")
-            if previous_intersecting_mem and previous_intersecting_mem == intersecting_member:
-                # big decrease till 5, small decrease till 1
-                if adjustment_factor > 6:
-                    adjustment_factor -= 5
-                else:
-                    adjustment_factor -= 1 if adjustment_factor > 2.5 else 0
-            else:
-                previous_intersecting_mem = intersecting_member
-                # after first adjustment
-                adjustment_factor = 20
-            
             # create temp node to hold new_pos
             num_nodes = len(Node.node_dict)
             new_num = num_nodes + 1
@@ -813,8 +835,6 @@ def test_intersection(p0, p1, member_from, member_to):
                 else:
                     t = c / b
                 if t >= 0 and t <= 1:
-                    x1 = (1 - t) * p0[0] + t * p1[0]
-                    y1 = (1 - t) * p0[1] + t * p1[1]
                     if DEBUG: 
                         print(f"Discrim.: {discrim}, Intersect {member.name} from {member_from.name} to {member_to.name}")
                     return (member, center)
@@ -1090,10 +1110,11 @@ def generate_path():
         path.append(next)
         members.remove(next)
         member = next
-    # For debugging, fix path to member 1 to n
+    # For debugging, specify a fixed path using member indices
     # path = []
-    # for member in MEMBERS:
-    #     path.append(member)
+    # indices = [8, 4, 1, 10, 6, 7, 9, 3, 5, 2, 12, 11]
+    # for index in indices:
+    #     path.append(MEMBERS[index - 1])
     print("Final path: ", path)
 
     ## Stop if no input image
@@ -1190,6 +1211,8 @@ def generate_path():
             # re-draw with new METHOD
             image_to_show = draw_arrows(path, img)
         elif k == ord("b"):
+            # Reset ADJUST_CONTROL_POINTS
+            ADJUST_CONTROL_POINTS = False
             # Toggle Bezier-ification of current paths
             BEZIERIFY = not BEZIERIFY
             display_str = f"Converting {METHOD} path into Bezier curves!" if BEZIERIFY else f"Now using: {METHOD} without Bezier curves!"
