@@ -1,4 +1,8 @@
 = Random Path Visualizer
++
+ifdef::env-github[]
+image:images/showcase_overlap_adjusted.png[width="700"]
+endif::[]
 
 This is a personal project that was initially started to automate the creation of permutations for my cell group for prayer purposes. I then decided to repurpose it into a generic path generator and also experiment with different ways to connect nodes in a graph to look more like a smooth curve.
 A visual representation of the generated path can be shown by providing an image along with an input file that will dictate the possible paths that can be drawn on the image.
@@ -10,7 +14,11 @@ Currently, the generator has 2 main methods to draw the paths between each membe
 
 It also has an option to convert the current paths that are stiff-looking into *smooth* Bezier curves.
 
-Lastly, it has an option to _adjust_ the Bezier curves created to *minimally* intersect any other members on the final image.
+Lastly, it has an option to _adjust_ the Bezier curves created to *minimally* intersect any other members on the final image. This can be seen by comparing the image above *(adjusted)* and the un-adjusted image below.
++
+ifdef::env-github[]
+image:images/showcase_overlap.png[width="700"]
+endif::[]
 
 === Sample Results
 The following images show the generated visual path of the *same* permutation.
@@ -71,7 +79,7 @@ _(sample input for 11 members is provided)_
 * Path can be saved to prevent any repetition of *pairs* in future path generation
 ** Etc. If A -> B -> C was saved previously, A -> B and B -> C will not repeat
 * Arrows on the image gradually changes color so that it is easy to follow the path
-* Different pathfinding methods in drawing lines between the members
+* Different pathfinding methods and modifiers in drawing lines between the members
 
 === Inputs:
 * Text file with list of members (`sample_input2.txt`)
@@ -92,9 +100,9 @@ _Nodes in the graph comprise of each member *AND* intermediate nodes that will f
 # Start with members, then intermediate nodes
 # Members: C if a circle is closer to the member's representation in the image and S for a square representation
 #          Size refers to the radius for a Circle or width for a Square, in pixels
-# Add a ':X' at the end of a member's line to indicate that it will not be part of a path but will be an obstacle for paths to avoid
-[MemberName]:[PixelX],[PixelY]:[C/S][Size][:X if member is an obstacle]
-[MemberName2]:[PixelX],[PixelY]:[C/S][Size][:X if member is an obstacle]
+# Add ':X' at the end of a member's line to indicate that it is only an obstacle for paths to avoid
+[MemberName]:[PixelX],[PixelY]:[C/S][Size][:X if member is only an obstacle]
+[MemberName2]:[PixelX],[PixelY]:[C/S][Size][:X if member is only an obstacle]
 [NodeNumber]:[PixelX],[PixelY]
 [NodeNumber2]:[PixelX],[PixelY]
 
