@@ -780,7 +780,7 @@ def validate_path(coords_lst, member_from, member_to, path):
                 # adjust_vec = (node_to_corner[0] + OUTWARD_FACTOR * center_to_corner[0], node_to_corner[1] + OUTWARD_FACTOR * center_to_corner[1])
                 adjust_vec = center_to_node
                 new_pos = (node_coords[0] + round(adjustment_factor * adjust_vec[0]), node_coords[1] + round(adjustment_factor * adjust_vec[1]))
-                print(f"Moving N{nodenum_to_adjust} by {adjustment_factor:.1f}x({adjust_vec[0]:.3f}, {adjust_vec[1]:.3f}) from {member_from} to {member_to} avoiding {intersecting_member}")
+                # print(f"Moving N{nodenum_to_adjust} by {adjustment_factor:.1f}x({adjust_vec[0]:.3f}, {adjust_vec[1]:.3f}) from {member_from} to {member_to} avoiding {intersecting_member}")
             
             if DEBUG:
                 print(f"Adjusting node: {nodenum_to_adjust} by {adjustment_factor} x {adjust_vec}")
