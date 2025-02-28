@@ -5,6 +5,7 @@ import sys
 import heapq
 import numpy as np
 import cv2 as cv
+from datetime import datetime
 from enum import Enum, unique
 
 @unique
@@ -23,6 +24,9 @@ NO_IMAGE = False
 FILEPATH = 'sample_input.txt'
 SAVEFILEPATH = 'sample_previous_path.txt'
 IMGFILEPATH = 'sample_img.png'
+# Folder to save images for whatsapp bot (any argument to activate)
+IMG_FOLDER_NAME = 'path_images'
+IMG_NAME = 'random_path_gen_img'
 # FILEPATH = 'showcase_input.txt'
 # SAVEFILEPATH = 'showcase_previous_path.txt'
 # IMGFILEPATH = 'sample_map.jpg'
@@ -197,7 +201,7 @@ class Node:
         if goal_node.num not in prev_dict or prev_dict[goal_node.num] == -1:
             print("Error! Goal cannot be reached! Restarting generator...")
             # Failsafe, restart
-            generate_path()
+            generate_path(False)
             quit()
         # Get sequence from prev_dict
         seq = []
@@ -1070,7 +1074,7 @@ def display_graph(img):
     cv.imshow("Graph Structure", graph_img)
     return graph_img
 
-def generate_path():
+def generate_path(shouldSaveImg):
     global MEMBERS
     global DISPLAY_GRAPH
     global METHOD
@@ -1135,7 +1139,7 @@ def generate_path():
                 is_current_config_saved = True
         elif char[0] == "r":
             is_current_config_saved = False
-            generate_path()
+            generate_path(shouldSaveImg)
             return
 
     ## Draw arrows on picture
@@ -1170,6 +1174,9 @@ def generate_path():
     # Platform-dependent, might only work on Windows
     KEYCODE_UP = 2490368
     KEYCODE_DOWN = 2621440
+
+    isImageSaved = False
+
     while True:
         if is_current_config_saved:
             saveNotifPos = (10, 530)
@@ -1177,7 +1184,20 @@ def generate_path():
         # resize img
         resized_img = cv.resize(image_to_show, IMG_DIMENSIONS[CURR_DIMENSION_INDEX], interpolation = cv.INTER_AREA)
         resized_img = display_instructions(resized_img)
-        cv.imshow("Generated Path", resized_img)
+        # if saving image, don't need to show
+        if not shouldSaveImg:
+            cv.imshow("Generated Path", resized_img)
+
+        if (shouldSaveImg and not isImageSaved):
+            isImageSaved = True
+            os.makedirs(IMG_FOLDER_NAME, exist_ok=True)
+            
+            # use date + time in imgName
+            currTimestamp = datetime.now()
+            dateTimeStr = currTimestamp.strftime("%Y%m%d-%H%M%S")
+
+            imgSavePath = os.path.join(IMG_FOLDER_NAME, IMG_NAME + "_" + dateTimeStr + ".png")
+            cv.imwrite(imgSavePath, resized_img)
             
         k = cv.waitKeyEx(0)
         # If "x" key pressed, close image
@@ -1252,7 +1272,11 @@ def generate_path():
                 print(f"Now using {CURR_DIMENSION_INDEX}-th window size!")
         elif k == ord("r"):
             is_current_config_saved = False
-            generate_path()
+            generate_path(shouldSaveImg)
             break
 
-generate_path()
+if __name__ == '__main__':
+    if (len(sys.argv) <= 0):
+        generate_path(False)
+    else:
+        generate_path(True)
