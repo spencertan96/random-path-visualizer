@@ -1,0 +1,210 @@
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const { spawn } = require('child_process');
+
+const fs = require('fs');
+const path = require('path');
+
+const FOLDER_NAME = "path_images"
+
+const COMMAND_TO_FUNC = 
+{
+    help: ExecuteHelpCommand,
+    ping: ExecutePingCommand,
+    joke: ExecuteJokeCommand,
+    pun: ExecutePunCommand,
+    meme: ExecuteMemeCommand,
+    randompath: ExecuteRandomPathCommand,
+};
+
+// Create a new client instance
+const client = new Client(
+{
+    authStrategy: new LocalAuth() 
+});
+
+// When the client is ready, run this code (only once)
+client.once('ready', () => {
+    console.log('Client is ready!');
+});
+
+// When the client received QR-Code
+client.on('qr', (qr) => {
+    qrcode.generate(qr, {small: true});
+});
+
+// Listening to all incoming messages
+client.on('message_create', async message => {
+	console.log("From: " + message.from + " | Msg: " + message.body);
+    
+    let commandWord = message.body.slice(1);
+    if (message.body[0] == "!" && commandWord in COMMAND_TO_FUNC)
+    {
+        console.log("Running Command: " + commandWord);
+        COMMAND_TO_FUNC[commandWord](message);   
+    }
+});
+
+// create child process to run python script
+// spawn('python', ["../random_path_gen.py"].concat(args));
+console.log("Current working directory:", process.cwd());
+const randomPathGenPy = spawn('python3', ["random_path_gen.py"].concat("test"));
+
+// Collect data from script and print to console
+let data = '';
+randomPathGenPy.stdout.on('data', (stdout) => {
+    data += stdout.toString();
+});
+
+// Print errors to console, if any
+randomPathGenPy.stderr.on('data', (stderr) => {
+    console.log(`stderr: ${stderr}`);
+});
+
+// When script is finished, print collected data
+randomPathGenPy.on('close', (code) => {
+    console.log(`child process exited with code ${code}`);
+    console.log(data);
+});
+
+function ExecuteHelpCommand(msg) 
+{
+    // Get all keys from the dictionary
+    let keys = Object.keys(COMMAND_TO_FUNC);
+    // Use map() to perform an action on each key
+    let result = keys.map(key => {
+        // add "!" prefix
+        return `!${key}`; // For example, return a string combining key and value
+    });
+
+    msg.reply(`Try these commands!\nType any of these: ${result.join(", ")}`);
+}
+
+function ExecutePingCommand(msg) 
+{
+    // reply "pong" to the chat the message was sent in
+    msg.reply('pong');
+}
+
+async function ExecuteJokeCommand(msg)
+{
+    const url = `https://v2.jokeapi.dev/joke/miscellaneous?type=single&blacklistFlags=nsfw,religious,racist,sexist,explicit`; // API endpoint for a random joke
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.joke) {
+            client.sendMessage(getRecipient(msg), data.joke); // If joke is returned, send it
+        } else {
+            client.sendMessage(getRecipient(msg), "Oops! I couldn't find a joke right now.");
+        }
+    } catch (error) {
+        console.error("Error fetching joke:", error);
+        client.sendMessage(getRecipient(msg), err.toString());
+    }
+}
+
+// same as joke but pun category
+async function ExecutePunCommand(msg)
+{
+    const url = `https://v2.jokeapi.dev/joke/pun?type=single&blacklistFlags=nsfw,religious,racist,sexist,explicit`; // API endpoint for a random joke
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.joke) {
+            client.sendMessage(getRecipient(msg), data.joke); // If joke is returned, send it
+        } else {
+            client.sendMessage(getRecipient(msg), "Oops! I couldn't find a joke right now.");
+        }
+    } catch (error) {
+        console.error("Error fetching joke:", error);
+        client.sendMessage(getRecipient(msg), err.toString());
+    }
+}
+
+async function ExecuteMemeCommand(msg) 
+{
+    // Example usage
+    fetchRandomMeme().then(async meme => {
+        try
+        {
+            console.log("Meme URL: " + meme);
+            const media = await MessageMedia.fromUrl(meme);
+
+            client.sendMessage(getRecipient(msg), media).then(() => {
+                console.log("Meme sent successfully!");
+            }).catch((err) => {
+                console.error("Error sending image:", err);
+            });
+        } 
+        catch (err)
+        {
+            console.error("Error sending image:", err)
+            client.sendMessage(getRecipient(msg), err.toString());
+        }
+    });
+}
+
+async function ExecuteRandomPathCommand(msg) 
+{
+    let imagePath = path.join(FOLDER_NAME, getLastModifiedFile(FOLDER_NAME))
+    console.log("Trying to send image at path: " + imagePath);
+
+    // Convert image to WhatsApp format
+    const media = await MessageMedia.fromFilePath(imagePath);
+
+    // Send image with a caption
+    client.sendMessage(getRecipient(msg), media, { caption: "Generated Image:" }).then(() => {
+        console.log("Image sent successfully!");
+    }).catch((err) => {
+        console.error("Error sending image:", err);
+    });
+}
+
+const fetchRandomMeme = async () => {
+    const url = "https://meme-api.com/gimme/wholesomememes"; // MemeAPI endpoint
+  
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+  
+      if (data.url) {
+        return data.url; // Send the meme URL
+      } else {
+        return "Oops! I couldn't find a meme right now."; // If no meme is found
+      }
+    } catch (error) {
+      console.error("Error fetching meme:", error);
+      return "Error fetching meme. Please try again later."; // Handle API errors
+    }
+};
+
+function getRecipient(msg) 
+{
+    return msg.to != null ? msg.to : msg.from;
+}
+  
+function getLastModifiedFile(dirPath) {
+    const files = fs.readdirSync(dirPath);  // Get list of files in the directory
+    let latestFile = null;
+    let latestTime = 0;
+
+    // Loop through files and check modification times
+    files.forEach((file) => {
+        const filePath = path.join(dirPath, file);  // Get full path of the file
+        const stats = fs.statSync(filePath);  // Get stats of the file
+
+        if (stats.isFile() && stats.mtimeMs > latestTime) {  // Compare modification time
+            latestTime = stats.mtimeMs;  // Update the latest modification time
+            latestFile = file;  // Update the latest file
+        }
+    });
+
+    return latestFile ? latestFile : 'No files found in the directory';
+}
+
+// Start your client
+client.initialize();
